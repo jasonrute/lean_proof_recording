@@ -2,7 +2,10 @@
 
 ## Infrastructure
 - [ ] Record githash for lean and mathlib and lean github/version.  Put in raw_data
-- [ ] Figure out how to get lean files so not modifying elan toolchains
+- [ ] Put lean running inside context manager.  Hopefully this will prevent runaway lean processes if python is closed early.
+- [ ] Save all lean files in paths.  This way we also save any modifications to the base lean files.
+- [ ] Save files first.  We want to do all easy stuff before running the long script which may fail.
+- [ ] Figure out how to get lean files so as not to modifying elan toolchains
 - [ ] Make full workflow
 - [ ] Make seperate process to break up the traces.  For each trace, add filename and trace position.
 
@@ -14,7 +17,8 @@
   - [ ] dead tactics
   - [ ] `<|>`
 - [ ] Add more checks
-  - Check that tactic strings don't subsume non-decendant tactics
+  - [ ] Check that tactic strings don't subsume non-decendent tactics
+  - [ ] Check that blocks beginning in `begin` end with `end` or `, end`
 
 ## Tactic flow
 - [ ] Seperate out as its own thing
@@ -29,6 +33,6 @@
 - [ ] make simple tactic prediction dataset
 
 ## Tactic parameter recording
-- [ ] make script to switch parser and itactic
-- [ ] make script to switch parser and itactic
-- [ ] record tactic state as string before and afte
+- [ ] make script to modify `parse` and `itactic` in parameters
+- [ ] use to find all tactic arguments
+- [ ] compare to other tactic string methods
