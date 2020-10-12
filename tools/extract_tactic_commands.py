@@ -5,6 +5,7 @@ import sys
 from pprint import pprint
 import re
 
+import extract_trace_data
 from tokenize_lean_files import LeanFile
 
 # Known issues:
@@ -446,38 +447,18 @@ def file_suffix(path_map, filename):
 def main():
     import pandas as pd
 
-    assert len(sys.argv) == 3
-    raw_data_directory = sys.argv[1]
-    out_file = sys.argv[2]
-    assert raw_data_directory.endswith("/")
-    assert out_file.endswith(".csv")
+    assert len(sys.argv) == 2
+    data_dir = sys.argv[1]
+    assert data_dir.endswith("/")
 
-    info_blocks = []
-    with open(raw_data_directory+"output.json", 'r') as f:
-        for line in f:
-            info = json.loads(line)
-            info_blocks.append(info)
+    data_tables, lean_files = extract_trace_data.extract_data(data_dir)
+    tactic_data = data_tables["tactic_trace"]
     
-    with open(raw_data_directory+"path_map.json", 'r') as f:
-        for line in f:
-            path_map = json.loads(line)
-            break
-
-    # point to saved file
-    # TODO: In the end, we only want to store the suffix
-    for info in info_blocks:
-        info['file_name'] = raw_data_directory+file_suffix(path_map, info['file_name'])
-        
-    filenames = {info['file_name'] for info in info_blocks}
-    for f in filenames:
+    # process one file at a time
+    for f in lean_files:
         print(f)
-        f_info_blocks = [info for info in info_blocks if info['file_name'] == f]
-        
-        # read files
-        lean_files = read_files(f_info_blocks)
+        data = {k: row for k, row in tactic_data.items() if row['filename'] == f}
 
-        # process data
-        data = collect_data(f_info_blocks)
         #print(pd.DataFrame(list(data.values())))
         add_addr_columns(data)
         add_forward_pointing_addrs(data)
