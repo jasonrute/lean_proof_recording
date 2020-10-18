@@ -119,3 +119,9 @@ end
 
 -- trailing comma
 example : true := by { skip ; trivial, }
+
+example : true := by { { skip ; [skip, skip] } <|> trivial}
+
+-- { } block with no executed children
+-- there is no first goal to focus on
+example : true := by { trivial , { skip, skip } } <|> trivial
