@@ -3,3 +3,6 @@
 /leanpkg.path
 /_lean
 *__pycache__
+/venv
+/.vscode
+/data
