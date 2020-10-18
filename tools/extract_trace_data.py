@@ -3,6 +3,7 @@ import pandas as pd
 from pprint import pprint
 import sys
 import json
+from pathlib import Path
 
 from tokenize_lean_files import LeanFile
 
@@ -64,6 +65,34 @@ def extract_tables(trace_blocks, path_map):
         
     return data_tables
 
+def save_tables(data_tables, cache_file):
+    with open(cache_file, 'w') as f:
+        for table_name, table in data_tables.items():
+            for key, row in table.items():
+                row['key'] = key
+                row['table_name'] = table_name
+                s = json.dumps(row)
+                f.write(s+"\n")
+
+def load_tables(cache_file):
+    data_tables = {}
+    with open(cache_file, 'r') as f:
+        for line in f:
+            if line != "\n":
+                d = json.loads(line)
+                table_name = d['table_name']
+                key = d['key']
+
+                if table_name not in data_tables:
+                    data_tables[table_name] = {}
+
+                if key not in data_tables[table_name]:
+                    data_tables[table_name][key] = collections.defaultdict(lambda: None)
+
+                data_tables[table_name][key].update(d)
+    return data_tables
+
+
 def extract_lean_file_list(trace_blocks, path_map):
     file_list = set()
     for info_block in trace_blocks:
@@ -74,7 +103,7 @@ def extract_lean_file_list(trace_blocks, path_map):
 def extract_tokenized_lean_files(data_dir, file_list):
     lean_files = {}
     for file in file_list:
-        file_path = data_dir + file
+        file_path = data_dir + "lean_files/" + file
         lean_files[file] = LeanFile(file_path)
     return lean_files
 
@@ -86,7 +115,11 @@ def extract_data(data_dir):
         print("Unexpected output:")
         pprint(o)
 
-    data_tables = extract_tables(trace_blocks, path_map)
+    if Path(data_dir+"_record_cache.json").exists():
+        data_tables = load_tables(data_dir+"_record_cache.json")
+    else:
+        data_tables = extract_tables(trace_blocks, path_map)
+        save_tables(data_tables, data_dir+"_record_cache.json")
 
     # would be better to store a file list in the data directory
     # or just get all files from the data directory.

@@ -52,7 +52,7 @@ def save_lean_files(path_map, lean_files, out_directory):
         for p in path_map:
             if file_path.startswith(p):
                 file_suffix = file_path[len(p):]
-                new_file_path = out_directory+path_map[p]+file_suffix
+                new_file_path = out_directory+"lean_files/"+path_map[p]+file_suffix
                 os.makedirs(os.path.dirname(new_file_path), exist_ok=True)
                 shutil.copy2(file_path, new_file_path)
                 break
@@ -99,22 +99,6 @@ def save_traced_data(info_blocks, out_directory):
         for info in info_blocks:
             s = json.dumps(info) + "\n"
             f.write(s)
-
-def save_lean_files_old(path_map, info_blocks, out_directory):
-    print("saving lean files")
-    files = set()
-    for info in info_blocks:
-        filename = info['file_name'] 
-        files.add(filename)
-    
-    for filename in files:
-        for p in path_map:
-            if filename.startswith(p):
-                file_suffix = filename[len(p):]
-                new_filename = out_directory+path_map[p]+file_suffix
-                os.makedirs(os.path.dirname(new_filename), exist_ok=True)
-                shutil.copy2(filename, new_filename)
-                break
 
 def run_lean_file_and_save_output(lean_file, out_directory):
     assert lean_file.endswith(".lean")

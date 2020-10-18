@@ -9,7 +9,7 @@ import re
 Token = collections.namedtuple('Token', ['string', 'type', 'line', 'start_column', 'end_column'])
 
 # there are other tokens as well, but these are important and/or easy to work with
-SPECIAL_TOKENS = [["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"]]
+SPECIAL_TOKENS = [["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
 # make sure they are sorted longest first
 SPECIAL_TOKENS = list(sorted(SPECIAL_TOKENS, key=len, reverse=True))
 
@@ -64,7 +64,7 @@ class LeanFile:
         
     @staticmethod
     def tokenize_line(line, line_num, prev_token_type):
-        assert prev_token_type in ['whitespace', 'block_comment', 'line_comment'], prev_token_type
+        assert prev_token_type in ['whitespace', 'block_comment', 'line_comment', 'string_literal'], (line, line_num, prev_token_type)
         # step 1: label char types
         # options: 'whitespace', 'symbol', 'alphanumeric', 'line_comment', 
         #          'block_comment', 'block_comment_terminal', 'string_literal', 
@@ -90,6 +90,8 @@ class LeanFile:
                 char_type = "line_comment"
             elif char == "/" and line[i+1] == "-":
                 char_type = "block_comment"
+            elif char == '"':
+                char_type = "string_literal"
             elif char.isspace():
                 char_type = "whitespace"
             # this captures character literals too which is fine for now

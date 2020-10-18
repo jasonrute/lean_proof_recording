@@ -4,6 +4,7 @@ import json
 import sys
 from pprint import pprint
 import re
+import traceback
 
 import extract_trace_data
 from tokenize_lean_files import LeanFile
@@ -38,7 +39,8 @@ COMMANDS = ["theorem", "axiom", "axioms", "variable", "protected", "private", "h
          "run_cmd", "#check", "#reduce", "#eval", "#print", "#help", "#exit",
          "#compile", "#unify", "lemma", "def"]
 
-BINDERS = ['Pi', 'forall', '∀', 'Π', 'Σ', 'exists', '∃', 'λ', 'fun']
+BINDERS = ['Pi', 'forall', '∀', 'Π', 'Σ', '∑', 'exists', '∃', 'λ', 'fun', '⋃', '∫⁻', '⨆', '∫', '⋂']
+BRACKETS = [('{', '}'), ('(',')'), ('[',']'), ('⟨','⟩'), ('⟪','⟫')]
 
 def collect_data(info_blocks):
     # store data in a two dimensional table.  Default value is None
@@ -208,6 +210,8 @@ def add_start_info(data, lean_files):
     for addr in depth_sorted_keys:
         row = data[addr]
         if row['tactic_token'] == ";":
+            assert row['first_child_addr'] is not None, pprint(row)
+            
             # use the start, left token, and left token position of the first child instead
             first_child_row = data[row['first_child_addr']]
             row['start_line'] = first_child_row['start_line']
@@ -217,6 +221,8 @@ def add_start_info(data, lean_files):
             row['left_token_column'] = first_child_row['left_token_column']
             
         elif row['tactic_token'] in ["{}", "begin end"]:
+            assert row['first_child_addr'] is not None, pprint(row)
+
             # set the start to the left token position of the first child
             # get a new left token and left token position
             first_child_row = data[row['first_child_addr']]
@@ -344,7 +350,7 @@ def add_tactic_strings(data, lean_files):
                     lean_files[row['filename']], 
                     row['start_line']-1, 
                     row['start_column']-1, 
-                    pairs=[('begin', 'end'), ('match', 'end'), ('{', '}'), ('(',')'), ('[',']'), ('⟨','⟩')],
+                    pairs= BRACKETS + [('begin', 'end'), ('match', 'end')],
                     #min_line = row['rightmost_decendent_line']-1,
                     #min_column = row['rightmost_decendent_column']-1,
                 )
@@ -353,7 +359,7 @@ def add_tactic_strings(data, lean_files):
                     lean_files[row['filename']], 
                     row['start_line']-1, 
                     row['start_column']-1, 
-                    pairs=[(None, cmd) for cmd in COMMANDS] + [(b, ',') for b in BINDERS] + [(None, ';'), (None, '|'), (None, '...'), ('then', 'else'), ('begin', 'end'), ('match', 'end'), ('{', '}'), ('(',')'), ('[',']'), ('⟨','⟩')],
+                    pairs=[(None, cmd) for cmd in COMMANDS] + [(b, ',') for b in BINDERS] + BRACKETS + [(None, ';'), (None, '|'), (None, '...'), ('then', 'else'), ('begin', 'end'), ('match', 'end')],
                     min_line = row['rightmost_decendent_line']-1,
                     min_column = row['rightmost_decendent_column']-1,
                 )
@@ -368,7 +374,7 @@ def add_tactic_strings(data, lean_files):
             lean_files[row['filename']], 
             row['start_line']-1, 
             row['start_column']-1, 
-            pairs=[(None, cmd) for cmd in COMMANDS] + [(b, ',') for b in BINDERS] + [(None, '|'), (None, ';'), (None, '...'), ('then', 'else'), ('begin', 'end'), ('match', 'end'), ('{', '}'), ('(',')'), ('[',']'), ('⟨','⟩')],
+            pairs=[(None, cmd) for cmd in COMMANDS] + [(b, ',') for b in BINDERS] + BRACKETS + [(None, '|'), (None, ';'), (None, '...'), ('then', 'else'), ('begin', 'end'), ('match', 'end')],
             min_line = row['rightmost_decendent_line']-1,
             min_column = row['rightmost_decendent_column']-1,
         )
@@ -391,7 +397,8 @@ def check_results(data):
             if (row['line'], row['column']) in tactic_strings:
                 s1 = tactic_strings[row['line'], row['column']]
                 s2 = row['tactic_string']
-                assert s1 == s2, "Different tactic strings: " + s1 + " " + s2
+                if s1 != s2:
+                    print("Different tactic strings at same location: " + s1 + " " + s2)
             else:
                 tactic_strings[row['line'], row['column']] = row['tactic_string']
 
@@ -443,7 +450,14 @@ def file_suffix(path_map, filename):
     for p in path_map:
         if filename.startswith(p):
             return path_map[p]+filename[len(p):]
-        
+
+def fix_keys(data):
+    new_data = {}
+    for k, d in data.items():
+        new_key = hash((d['filename'], d['line'], d['column'], d['depth'], d['index']))
+        new_data[new_key] = d
+    return new_data
+
 def main():
     import pandas as pd
 
@@ -451,46 +465,52 @@ def main():
     data_dir = sys.argv[1]
     assert data_dir.endswith("/")
 
+    print("Extracting traced data ...")
     data_tables, lean_files = extract_trace_data.extract_data(data_dir)
     tactic_data = data_tables["tactic_trace"]
     
     # process one file at a time
     for f in lean_files:
-        print(f)
-        data = {k: row for k, row in tactic_data.items() if row['filename'] == f}
+        try:
+            print(f)
+            data = {k: row for k, row in tactic_data.items() if row['filename'] == f}
 
-        #print(pd.DataFrame(list(data.values())))
-        add_addr_columns(data)
-        add_forward_pointing_addrs(data)
-        #print(pd.DataFrame(list(data.values())).info())
-        
-        add_tactic_names(data, lean_files)
-        add_start_info(data, lean_files)
-        add_block_type(data)
-        add_tactic_strings(data, lean_files)
+            data = fix_keys(data)
+            #print(pd.DataFrame(list(data.values())))
+            add_addr_columns(data)
+            add_forward_pointing_addrs(data)
+            #print(pd.DataFrame(list(data.values())).info())
+            
+            add_tactic_names(data, lean_files)
+            add_start_info(data, lean_files)
+            add_block_type(data)
+            add_tactic_strings(data, lean_files)
 
-        sorted_rows = sorted(
-            data.values(), 
-            key=lambda row: (
-                row['filename'], 
-                row['proof_line'], 
-                row['proof_column'],
-                row['depth'], 
-                row['index'],
-                row['line'],
-                row['column'],
+            sorted_rows = sorted(
+                data.values(), 
+                key=lambda row: (
+                    row['filename'], 
+                    row['proof_line'], 
+                    row['proof_column'],
+                    row['depth'], 
+                    row['index'],
+                    row['line'],
+                    row['column'],
+                )
             )
-        )
 
-        df = pd.DataFrame(list(sorted_rows))
-        #df = df[df['left_token'] == 'by']
-        #df = df[df['tactic_string'].str.contains('<|>')]
-        for _, row in df.iterrows(): 
-            #print(">", row['line'], row['column'], row['tactic_string'])
-            #print(">>", row['right_token'])
-            pass
-        #print(pd.DataFrame(list(data.values()))[['prev_line', 'next_addr']])
-        check_results(data)
+            df = pd.DataFrame(list(sorted_rows))
+            #df = df[df['left_token'] == 'by']
+            #df = df[df['tactic_string'].str.contains('<|>')]
+            for _, row in df.iterrows(): 
+                #print(">", row['line'], row['column'], row['tactic_string'])
+                #print(">>", row['right_token'])
+                pass
+            #print(pd.DataFrame(list(data.values()))[['prev_line', 'next_addr']])
+            check_results(data)
+        except Exception:
+            traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()
