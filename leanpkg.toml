@@ -1,8 +1,8 @@
 [package]
 name = "lean_proof_recording"
 version = "0.1"
-lean_version = "leanprover-community/lean:3.20.0"
+lean_version = "leanprover-community/lean:3.21.0"
 path = "src"
 
 [dependencies]
-mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "9379050719fa9f2605289bd85a0fb29100084eb3"}
+mathlib = {git = "https://github.com/leanprover-community/mathlib", rev = "df4500242eb6aa6ee20b315b185b0f97a9b359c5"}
