@@ -1,20 +1,51 @@
 """
 Tools for parsing lean files into tokens
 """
-import collections
-import re
+import dataclasses
+import enum
+from typing import Generator, List, Union
+
+
+class TokenType(enum.Enum):
+    LINE_COMMENT = 1
+    BLOCK_COMMENT = 2
+    WHITESPACE = 3
+    SYMBOL = 4
+    ALPHANUMERIC = 5
+    STRING_LITERAL = 6
+    BOF = 7  # Beginning of file
+    EOF = 8  # End of file
+
+class TerminalType(enum.Enum):
+    """
+    Two types only used for intermediate calculations
+    """
+    BLOCK_COMMENT_TERMINAL = -1
+    STRING_LITERAL_TERMINAL = -2
 
 
 # here we use 0-indexing for the lines and columns
-Token = collections.namedtuple('Token', ['string', 'type', 'line', 'start_column', 'end_column'])
+@dataclasses.dataclass
+class Token:
+    """A token in the code, with position information"""
+    string: str
+    type: TokenType
+    line: int
+    #end_line: int
+    column: int
+    end_column: int
 
 # there are other tokens as well, but these are important and/or easy to work with
-SPECIAL_TOKENS = [["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
+SPECIAL_TOKENS_PARTS = [["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
 # make sure they are sorted longest first
-SPECIAL_TOKENS = list(sorted(SPECIAL_TOKENS, key=len, reverse=True))
+SPECIAL_TOKENS = list(sorted(SPECIAL_TOKENS_PARTS, key=len, reverse=True))
 
 class LeanFile:
-    def __init__(self, filename):
+    filename: str  # useful for debugging
+    lines: List[List[Token]]
+
+    def __init__(self, filename: str):
+        self.filename = filename
         assert filename.endswith(".lean"), filename
 
         # read file
@@ -25,18 +56,27 @@ class LeanFile:
         
         # tokenize
         self.lines = []
-        prev_token_type = 'whitespace'
+        prev_token_type = TokenType.BOF
         for i, line in enumerate(lines):
             tokens = LeanFile.tokenize_line(line, i, prev_token_type)
-            prev_token_type  = tokens[-1].type
+            prev_token_type = tokens[-1].type
             self.lines.append(tokens)
+        final_token = self.lines[-1][-1]
+        eof = Token(
+            string="", 
+            type=TokenType.EOF, 
+            line=final_token.line, 
+            column=final_token.end_column, 
+            end_column=final_token.end_column
+        )
+        self.lines[-1].append(eof)
 
-    @staticmethod
     # this isn't completely accurate.  I think it also will capture
     # - char literals, e.g. 'a'
     # - 
     # see https://github.com/leanprover/lean/blob/master/src/util/name.cpp
-    def is_name_char(c):
+    @staticmethod
+    def is_name_char(c: str):
         # special good characters
         if c in ['_', "'"]:
             return True
@@ -63,42 +103,39 @@ class LeanFile:
         return False
         
     @staticmethod
-    def tokenize_line(line, line_num, prev_token_type):
-        assert prev_token_type in ['whitespace', 'block_comment', 'line_comment', 'string_literal'], (line, line_num, prev_token_type)
+    def tokenize_line(line: str, line_num: int, prev_token_type: TokenType) -> List[Token]:
+        assert prev_token_type in [TokenType.BOF, TokenType.WHITESPACE, TokenType.BLOCK_COMMENT, TokenType.LINE_COMMENT, TokenType.STRING_LITERAL], (line, line_num, prev_token_type)
         # step 1: label char types
-        # options: 'whitespace', 'symbol', 'alphanumeric', 'line_comment', 
-        #          'block_comment', 'block_comment_terminal', 'string_literal', 
-        #          'string_literal_terminal'
         prev_char = None
-        prev_char_type = prev_token_type if prev_token_type != 'line_comment' else 'whitespace'
+        prev_char_type = prev_token_type if prev_token_type != TokenType.LINE_COMMENT else TokenType.WHITESPACE
         char_types = []
         for i, char in enumerate(line):
             # label symbol type
-            if prev_char_type == "line_comment":
-                char_type = "line_comment"
-            elif prev_char_type == "block_comment":
+            if prev_char_type == TokenType.LINE_COMMENT:
+                char_type = TokenType.LINE_COMMENT
+            elif prev_char_type == TokenType.BLOCK_COMMENT:
                 if (prev_char, char) == ("-", "/"):
-                    char_type = "block_comment_terminal"
+                    char_type = TerminalType.BLOCK_COMMENT_TERMINAL
                 else:
-                    char_type = "block_comment"
-            elif prev_char_type == "string_literal":
+                    char_type = TokenType.BLOCK_COMMENT
+            elif prev_char_type == TokenType.STRING_LITERAL:
                 if char == '"' and prev_char != "\\":
-                    char_type = "string_literal_terminal"
+                    char_type = TerminalType.STRING_LITERAL_TERMINAL
                 else:
-                    char_type = "string_literal"
+                    char_type = TokenType.STRING_LITERAL
             elif char == "-" and line[i+1] == "-":
-                char_type = "line_comment"
+                char_type = TokenType.LINE_COMMENT
             elif char == "/" and line[i+1] == "-":
-                char_type = "block_comment"
+                char_type = TokenType.BLOCK_COMMENT
             elif char == '"':
-                char_type = "string_literal"
+                char_type = TokenType.STRING_LITERAL
             elif char.isspace():
-                char_type = "whitespace"
+                char_type = TokenType.WHITESPACE
             # this captures character literals too which is fine for now
             elif LeanFile.is_name_char(char):
-                char_type = "alphanumeric"
+                char_type = TokenType.ALPHANUMERIC
             else:
-                char_type = "symbol"
+                char_type = TokenType.SYMBOL
             
             char_types.append(char_type)
             prev_char_type = char_type
@@ -106,29 +143,38 @@ class LeanFile:
         
         # step 2: join certain char_type pairs
         tokens = []
-        prev_char_type = None
-        token_string = None
-        token_type = None
-        token_start = None
+
+        def get_token_type(char_type: Union[TokenType, TerminalType]) -> TokenType:
+            if char_type == TerminalType.BLOCK_COMMENT_TERMINAL:
+                return TokenType.BLOCK_COMMENT
+            if char_type == TerminalType.STRING_LITERAL_TERMINAL:
+                return TokenType.STRING_LITERAL
+            assert isinstance(char_type, TokenType)
+            return char_type
+
+        token_type = get_token_type(char_types[0])
+        token_string = line[0]
+        token_start = 0
+        i = 0
+        prev_char_type = char_types[0]
         
-        for i, (char, char_type) in enumerate(zip(line, char_types)):
-            if prev_char_type is None:
-                token_string = char
-                token_type = char_type
-                token_start = i
-            elif prev_char_type == "block_comment" and char_type == "block_comment_terminal":
+        for char, char_type in zip(line[1:], char_types[1:]):
+            i += 1
+            if prev_char_type == TokenType.BLOCK_COMMENT and char_type == TerminalType.BLOCK_COMMENT_TERMINAL:
                 token_string += char
-            elif prev_char_type == "string_literal" and char_type == "string_literal_terminal":
+            elif prev_char_type == TokenType.STRING_LITERAL and char_type == TerminalType.STRING_LITERAL_TERMINAL:
                 token_string += char
-            elif char_type != "symbol" and prev_char_type == char_type:
+            elif char_type != TokenType.SYMBOL and prev_char_type == char_type:
                 token_string += char
             else:
+                assert i == len(token_string) + token_start, (token_start, i, token_string)
                 tokens.append(Token(token_string, token_type, line_num, token_start, i))
                 token_string = char
-                token_type = char_type
+                token_type = get_token_type(char_type)
                 token_start = i
-            prev_char_type = char_type    
-        tokens.append(Token(token_string, token_type, line_num, token_start, i))
+            prev_char_type = char_type
+        assert len(line) == len(token_string) + token_start, (token_start, len(line), token_string)
+        tokens.append(Token(token_string, token_type, line_num, token_start, len(line)))
         
         # step 3: combine certain tokens
         combined_tokens = []
@@ -140,11 +186,12 @@ class LeanFile:
                 if all(t.string == s for t, s in zip(tokens[i:i+len(special)], special)):
                     new_token = Token(
                         string="".join(special),
-                        type='symbol',
+                        type=TokenType.SYMBOL,
                         line=tokens[i].line,
-                        start_column=tokens[i].start_column,
+                        column=tokens[i].column,
                         end_column=tokens[i+len(special)-1].end_column
                     )
+                    assert new_token.end_column == len(new_token.string) + new_token.column, (new_token.column, new_token.end_column, new_token.string)
                     i2 = i + len(special)
                     break
             else:
@@ -156,40 +203,52 @@ class LeanFile:
 
         return combined_tokens
     
-    def get_token(self, line, column):
+    def get_token(self, line: int, column: int) -> Token:
         assert line < len(self.lines)
         for token in self.lines[line]:
-            if token.start_column < column:
-                assert token.end_column <= column, "The provided line/column ({},{}) doesn't match with the closest token ({},{}):\n{}".format(line, column, line, token.start_column, token.string)
+            if token.column < column:
+                assert token.end_column <= column, "The provided line/column ({},{}) doesn't match with the closest token ({},{}):\n{}".format(line, column, line, token.column, token.string)
                 continue
-            if token.start_column == column:
+            if token.column == column:
                 return token
             
         assert False
     
-    def get_token_pos(self, line, column):
+    def get_token_pos(self, line: int, column: int) -> int:
         assert line < len(self.lines)
+        assert column <= self.lines[line][-1].column, (column, self.lines[line])
         for pos, token in enumerate(self.lines[line]):
-            if token.start_column < column:
+            if token.column < column:
                 continue
-            if token.start_column == column:
+            if token.column == column:
                 return pos
             assert False
         assert False
 
-    def iter_tokens_right(self, start_line, start_column):
+    def iter_tokens_right(self, start_line: int, start_column: int) -> Generator[Token, None, None]:
         start_pos = self.get_token_pos(start_line, start_column)
         for line in self.lines[start_line:]:
             for token in line[start_pos:]:
                 yield token
             start_pos = 0
     
-    def iter_tokens_left(self, start_line, start_column):
+    def iter_tokens_left(self, start_line: int, start_column: int) -> Generator[Token, None, None]:
         start_pos = self.get_token_pos(start_line, start_column)
         for line in reversed(self.lines[0:start_line+1]):
-            for token in reversed(line[0: start_pos]): # don't include current token
+            for token in reversed(line[0: start_pos]):  # don't include current token
                 yield token
             start_pos = None
+    
+    def slice_tokens(self, start_line: int, start_column: int, end_line: int, end_column: int) -> List[Token]:
+        return [
+            t for t in self.iter_tokens_right(start_line, start_column) 
+            if (t.line, t.column) < (end_line, end_column)
+        ]
+    
+    def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int) -> str:
+        tokens = self.slice_tokens(start_line, start_column, end_line, end_column)
+        return "".join(t.string for t in tokens)
+
 
 if __name__ == "__main__":
     #filename = "tmp/proof_recording_example.lean"
