@@ -167,12 +167,12 @@ match (finished, is_same prev_addr prev_open_addr) with
 end
 
 meta def step_and_record {α : Type u} (line col : ℕ) (t : tactic α) : tactic unit := do
--- only record if the pp.colors flag is set true
+-- only record if the pp.colors flag is set false
 -- we can't make our own system option, so re-using
 -- one built in.
 
 o <- get_options,
-if (o.get_bool `pp.colors ff) then do
+if (o.get_bool `pp.colors tt) then do
   store_info_in_tactic_state ff line col, -- before
   step t,
   store_info_in_tactic_state tt line col  -- after

@@ -1,6 +1,6 @@
 import init.meta.lean.parser
 
---set_option pp.colors true  
+--set_option pp.colors false  
 
 namespace parser
 open lean

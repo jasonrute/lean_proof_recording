@@ -70,7 +70,7 @@ def run_lean_make(filename, out_directory):
             print("piping stdout to", stdout_file.name, "...")
             print("piping stderr to", stderr_file.name, "...")
             out = subprocess.Popen(
-                ['lean', '--make', '--json', '-D pp.colors=true', filename], 
+                ['lean', '--make', '--json', '-D pp.colors=false', filename], 
                 stdout=stdout_file, 
                 stderr=stderr_file
             )

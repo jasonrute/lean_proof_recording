@@ -1,6 +1,6 @@
 -- co-opting pp.colors as a flag to turn the tracing on
--- can also be set from the command line with -D pp.colors=true
-set_option pp.colors true  
+-- can also be set from the command line with -D pp.colors=false
+set_option pp.colors false  
 
 example : true := begin 
     skip, exact by trivial, done
