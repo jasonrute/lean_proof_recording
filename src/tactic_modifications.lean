@@ -1,4 +1,6 @@
--- START CUSTOM CODE
+-- proof recording
+namespace pr
+
 /-- Each tactic application within a given proof can be keyed by four
 numbers.  Combinators allow a tactic to be called more than once, and
 some nested tactics use the same line and column position, so
@@ -166,19 +168,21 @@ match (finished, is_same prev_addr prev_open_addr) with
   return ()
 end
 
-meta def step_and_record {α : Type u} (line col : ℕ) (t : tactic α) : tactic unit := do
--- only record if the pp.colors flag is set false
+meta def {u} step_and_record {α : Type u} (line col : ℕ) (t : tactic α) : tactic unit := do
+-- only record if the pp.colors flag is set to false
 -- we can't make our own system option, so re-using
--- one built in.
+-- one built in.  (Even thought we are setting it to
+-- the default, we can still check that it is set.)
 
-o <- get_options,
-if (o.get_bool `pp.colors tt) then do
+o <- tactic.get_options,
+if bnot (o.get_bool `pp.colors tt) then do
   store_info_in_tactic_state ff line col, -- before
-  step t,
+  tactic.step t,
   store_info_in_tactic_state tt line col  -- after
-else step t
+else tactic.step t
+
+end pr
 
 meta def istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
-λ s, (@scope_trace _ line col (λ _, step_and_record line col t s)).clamp_pos line0 line col
-
+λ s, (@scope_trace _ line col (λ _, pr.step_and_record line col t s)).clamp_pos line0 line col
 -- END CUSTOM CODE
