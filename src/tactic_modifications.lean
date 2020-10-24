@@ -1,12 +1,31 @@
--- proof recording
-namespace pr
+namespace pr  -- proof recording code
 
-/-- Each tactic application within a given proof can be keyed by four
+/-- Trace data as JSON preceeded by a `<PR>` flag.
+This makes it easy to filter out all the traced data. -/
+meta def trace_data (table : string) (key : string) (field : string) (data : string) : tactic unit :=
+  tactic.trace $ "<PR> {" 
+    ++ "\"table\": " ++ (repr table) ++ ", "
+    ++ "\"key\": " ++ (repr key) ++ ", "
+    ++ "\"" ++ field ++ "\": " ++ data
+    ++ "}"
+
+meta def trace_data_string (table : string) (key : string) (field : string) (str_data : string) : tactic unit :=
+  trace_data table key field (repr str_data)
+
+meta def trace_data_num (table : string) (key : string) (field : string) (num_data : nat) : tactic unit :=
+  trace_data table key field (repr num_data)
+
+meta def trace_data_bool (table : string) (key : string) (field : string) (bool_data : bool) : tactic unit :=
+  trace_data table key field (if bool_data then "true" else "false")
+
+-- tactic recording
+
+/-- Each tactic application within a given file can be keyed by four
 numbers.  Combinators allow a tactic to be called more than once, and
 some nested tactics use the same line and column position, so
 we also include depth to capture nesting and index to capture exectuted
-order.  A proof can be uniquely keyed by its first tactic (at depth 1, index 1).
--/
+order.  (A proof can be uniquely keyed by its first tactic 
+at depth 1, index 1.) -/
 structure tactic_address :=
   -- the line and column of the tactic instance
   -- using 1-indexing like editors do even though lean uses a mix of 0 and 1-indexing
@@ -16,34 +35,23 @@ structure tactic_address :=
   -- index indicating the order of execution
   (index : nat)
 
-def newline := "\n"
+meta def addr_key (addr : tactic_address) : string :=
+  (to_string addr.line) 
+    ++ ":" ++ (to_string addr.column)
+    ++ ":" ++ (to_string addr.depth)
+    ++ ":" ++ (to_string addr.index)
 
-/-- Trace data as JSON preceeded by a `<PR>` flag.
-This makes it easy to filter out all the traced data. -/
-meta def trace_data (addr : tactic_address) (field : string) (data : string) : tactic unit :=
-  tactic.trace $ newline 
-    ++ "<PR> {" 
-    ++ "\"line\": " ++ (repr addr.line) ++ ", "
-    ++ "\"column\": " ++ (repr addr.column) ++ ", "
-    ++ "\"depth\": " ++ (repr addr.depth) ++ ", "
-    ++ "\"index\": " ++ (repr addr.index) ++ ", "
-    ++ "\"" ++ field ++ "\": " ++ data
-    ++ "}" ++ newline
+meta def trace_tactic_data_string (addr : tactic_address) (field : string) (str_data : string) : tactic unit :=
+  trace_data_string "tactic_instances" (addr_key addr) field str_data
 
-meta def trace_data_string (addr : tactic_address) (field : string) (str_data : string) : tactic unit :=
-  trace_data addr field (repr str_data)
+meta def trace_tactic_data_num (addr : tactic_address) (field : string) (num_data : nat) : tactic unit :=
+  trace_data_num "tactic_instances" (addr_key addr) field num_data
 
-meta def trace_data_num (addr : tactic_address) (field : string) (num_data : nat) : tactic unit :=
-  trace_data addr field (repr num_data)
+meta def trace_tactic_data_bool (addr : tactic_address) (field : string) (bool_data : bool) : tactic unit :=
+  trace_data_bool "tactic_instances" (addr_key addr) field bool_data
 
-meta def trace_data_bool (addr : tactic_address) (field : string) (bool_data : bool) : tactic unit :=
-  trace_data addr field (if bool_data then "true" else "false")
-
-meta def trace_data_addr (addr : tactic_address) (field : string) (addr_data : tactic_address) : tactic unit := do
-  trace_data_num addr (field ++ "_line") addr_data.line,
-  trace_data_num addr (field ++ "_column") addr_data.column,
-  trace_data_num addr (field ++ "_depth") addr_data.depth,
-  trace_data_num addr (field ++ "_index") addr_data.index
+meta def trace_tactic_data_addr (addr : tactic_address) (field : string) (addr_data : tactic_address) : tactic unit :=
+  trace_data_string "tactic_instances" (addr_key addr) field (addr_key addr_data)
 
 meta def get_tactic_address (o : options) (nm : name) : tactic_address := 
   { tactic_address .
@@ -66,6 +74,35 @@ def is_same (a b : tactic_address) : bool := (
   a.depth = b.depth ∧
   a.index = b.index
 )
+
+meta def trace_tactic_state_data (addr: tactic_address) (finished : bool) := do
+-- this is very customizable
+-- for now just trace some basic stuff
+
+-- position data
+let t_key := (addr_key addr),
+let temporal := if finished then "after" else "before",
+let ts_key := t_key ++ ":" ++ temporal,
+trace_data_string "tactic_state" ts_key "tactic_instance" t_key,
+trace_data_string "tactic_state" ts_key "before_after" temporal,
+
+-- environment (just store fingerprints)
+env <- tactic.get_env,
+trace_data_num "tactic_state" ts_key "env_fingerprint" env.fingerprint,
+
+-- goals
+goals <- tactic.get_goals,
+trace_data_num "tactic_state" ts_key "goal_count" goals.length,
+goals.enum.mmap' $ λ ⟨n, g⟩, (do
+  let g_key := ts_key ++ ":" ++ (to_string n),
+  trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
+  trace_data_num "tactic_state_goal" g_key "ix" n,
+  trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
+  fmt <- tactic.pp g,
+  trace_data_string "tactic_state_goal" g_key "goal_pp" (to_string fmt)
+),
+trace_data_string "tactic_state" ts_key "before_after" temporal,
+return ()
 
 meta def store_info_in_tactic_state (finished : bool) (line col : ℕ) : tactic unit := do
 let column := col + 1, -- use 1-indexed columns for convience
@@ -98,16 +135,19 @@ match (finished, is_same prev_addr prev_open_addr) with
   let new_proof_addr := if new_depth = 1 then new_addr else proof_addr,
 
   -- trace data to stdout
-  trace_data_bool new_addr "executed" tt,
-  trace_data_addr new_addr "proof" new_proof_addr,
-  trace_data_addr new_addr "block" new_block_addr,
-  trace_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
-  -- TODO: Should I just use the previous tactic.  It might be of interest to know previous tactic completed in this tactic state
-  trace_data_addr new_addr "prev" ⟨0,0,0,0⟩, -- no previous tactic at same depth
+  trace_tactic_data_bool new_addr "executed" tt,
+  trace_tactic_data_num new_addr "line" new_addr.line,
+  trace_tactic_data_num new_addr "column" new_addr.column,
+  trace_tactic_data_num new_addr "depth" new_addr.depth,
+  trace_tactic_data_num new_addr "index" new_addr.depth,
+  trace_tactic_data_addr new_addr "proof" new_proof_addr,
+  trace_tactic_data_addr new_addr "block" new_block_addr,
+  trace_tactic_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
+  trace_tactic_data_addr new_addr "prev" prev_addr,  -- previous completed tactic (not same depth)
   
-  -- TODO: This is ambiguous:  Remove and handle in python
-  -- trace_data_addr prev_open_addr "first_child" new_addr,
-  
+  -- trace data about the state beforehand
+  trace_tactic_state_data new_addr ff,
+
   -- update proof trace information
   o <- tactic.get_options,
   let o := o.set_nat `proof_rec.depth new_depth,
@@ -133,14 +173,19 @@ match (finished, is_same prev_addr prev_open_addr) with
   },
 
   -- trace data to stdout
-  trace_data_bool new_addr "executed" tt,
-  trace_data_addr new_addr "proof" proof_addr,
-  trace_data_addr new_addr "block" block_addr,
-  trace_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
-  trace_data_addr new_addr "prev" prev_addr,
-  -- TODO: ambiguous.  Remove and handle in python.
-  --trace_data_addr prev_addr "next" new_addr,
-  
+  trace_tactic_data_bool new_addr "executed" tt,
+  trace_tactic_data_num new_addr "line" new_addr.line,
+  trace_tactic_data_num new_addr "column" new_addr.column,
+  trace_tactic_data_num new_addr "depth" new_addr.depth,
+  trace_tactic_data_num new_addr "index" new_addr.depth,
+  trace_tactic_data_addr new_addr "proof" proof_addr,
+  trace_tactic_data_addr new_addr "block" block_addr,
+  trace_tactic_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
+  trace_tactic_data_addr new_addr "prev" prev_addr,
+
+  -- trace data about the state beforehand
+  trace_tactic_state_data new_addr ff,
+
   -- update proof trace information (only information which changes)
   o <- tactic.get_options,
   let o := o.set_nat `proof_rec.depth new_depth,
@@ -157,8 +202,11 @@ match (finished, is_same prev_addr prev_open_addr) with
   let new_addr := prev_open_addr,
   
   -- trace data to stdout
-  trace_data_bool prev_open_addr "succeeded" tt,
+  trace_tactic_data_bool prev_open_addr "succeeded" tt,
   
+  -- trace data about the state afterward
+  trace_tactic_state_data new_addr tt,
+
   -- update proof trace information (only information which changes)
   o <- tactic.get_options,
   let o := o.set_nat `proof_rec.depth (depth - 1),
@@ -185,4 +233,3 @@ end pr
 
 meta def istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
 λ s, (@scope_trace _ line col (λ _, pr.step_and_record line col t s)).clamp_pos line0 line col
--- END CUSTOM CODE
