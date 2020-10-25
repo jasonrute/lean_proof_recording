@@ -1,6 +1,7 @@
 """
 Tools for parsing lean files into tokens
 """
+import collections
 import dataclasses
 import enum
 from typing import Generator, List, Union
@@ -248,6 +249,29 @@ class LeanFile:
     def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int) -> str:
         tokens = self.slice_tokens(start_line, start_column, end_line, end_column)
         return "".join(t.string for t in tokens)
+    
+    def find_pattern(self, pattern: List[Union[str, TokenType]]) -> Generator[List[Token], None, None]:
+        """
+        Search for a pattern.
+
+        pattern: A list of either strings (to match to tokens exactly) 
+                 or token types (also matching exactly to tokens).
+        """
+        def token_matches_pattern(t: Token, p: Union[str, TokenType]):
+            if isinstance(p, str):
+                return t.string == p
+            else:
+                return t.type == p
+
+        tokens = collections.deque([])
+        for t in self.iter_tokens_right(0, 0):
+            if len(tokens) < len(pattern):
+                tokens.append(t)
+            else:
+                tokens.append(t)
+                tokens.popleft()
+                if all(token_matches_pattern(t, p) for t, p in zip(tokens, pattern)):
+                    yield list(tokens)
 
 
 if __name__ == "__main__":

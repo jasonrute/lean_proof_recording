@@ -1,4 +1,31 @@
-namespace pr  -- proof recording code
+/- This is a staging area for code which will be inserted
+into a Lean file. 
+
+The code to be inserted is between the line comments
+`PR BEGIN MODIFICATION` and `PR END MODIFICATION`
+
+It will be inserted by `insert_proof_recording_code.py`.
+
+Insert info:
+  - file: `_target/lean/library/init/meta/tactic.lean`
+  - location: end of file
+
+Most of this code is carefully written, but
+any code labeled "BEGIN/END CUSTOMIZABLE CODE"
+encourages customization to change what
+is being recorded
+-/
+
+prelude
+import init.meta.tactic
+
+universes u v
+
+
+--PR BEGIN MODIFICATION
+
+-- proof recording code
+namespace pr  
 
 /-- Trace data as JSON preceeded by a `<PR>` flag.
 This makes it easy to filter out all the traced data. -/
@@ -36,10 +63,10 @@ structure tactic_address :=
   (index : nat)
 
 meta def addr_key (addr : tactic_address) : string :=
-  (to_string addr.line) 
-    ++ ":" ++ (to_string addr.column)
-    ++ ":" ++ (to_string addr.depth)
-    ++ ":" ++ (to_string addr.index)
+  (repr addr.line) 
+    ++ ":" ++ (repr addr.column)
+    ++ ":" ++ (repr addr.depth)
+    ++ ":" ++ (repr addr.index)
 
 meta def trace_tactic_data_string (addr : tactic_address) (field : string) (str_data : string) : tactic unit :=
   trace_data_string "tactic_instances" (addr_key addr) field str_data
@@ -76,8 +103,9 @@ def is_same (a b : tactic_address) : bool := (
 )
 
 meta def trace_tactic_state_data (addr: tactic_address) (finished : bool) := do
--- this is very customizable
--- for now just trace some basic stuff
+-- BEGIN CUSTOMIZABLE CODE
+-- customize as needed to record different
+-- parts of the tactic state in different formats
 
 -- position data
 let t_key := (addr_key addr),
@@ -90,19 +118,21 @@ trace_data_string "tactic_state" ts_key "before_after" temporal,
 env <- tactic.get_env,
 trace_data_num "tactic_state" ts_key "env_fingerprint" env.fingerprint,
 
--- goals
+-- goal stack information
 goals <- tactic.get_goals,
 trace_data_num "tactic_state" ts_key "goal_count" goals.length,
+
+-- individual goal information
 goals.enum.mmap' $ λ ⟨n, g⟩, (do
-  let g_key := ts_key ++ ":" ++ (to_string n),
+  let g_key := ts_key ++ ":" ++ (repr n),
   trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
   trace_data_num "tactic_state_goal" g_key "ix" n,
   trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
   fmt <- tactic.pp g,
-  trace_data_string "tactic_state_goal" g_key "goal_pp" (to_string fmt)
+  trace_data_string "tactic_state_goal" g_key "goal_pp" fmt.to_string
 ),
-trace_data_string "tactic_state" ts_key "before_after" temporal,
 return ()
+-- END CUSTOMIZABLE CODE
 
 meta def store_info_in_tactic_state (finished : bool) (line col : ℕ) : tactic unit := do
 let column := col + 1, -- use 1-indexed columns for convience
@@ -216,7 +246,7 @@ match (finished, is_same prev_addr prev_open_addr) with
   return ()
 end
 
-meta def {u} step_and_record {α : Type u} (line col : ℕ) (t : tactic α) : tactic unit := do
+meta def step_and_record {α : Type u} (line col : ℕ) (t : tactic α) : tactic unit := do
 -- only record if the pp.colors flag is set to false
 -- we can't make our own system option, so re-using
 -- one built in.  (Even thought we are setting it to
@@ -231,5 +261,7 @@ else tactic.step t
 
 end pr
 
-meta def istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
+-- redefined istep to do proof recording
+meta def tactic.istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
 λ s, (@scope_trace _ line col (λ _, pr.step_and_record line col t s)).clamp_pos line0 line col
+--PR END MODIFICATION
