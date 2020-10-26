@@ -21,7 +21,7 @@ python3 tools/refresh.py
 Run this command to modify the lean and mathlib files.  (Note, the modifications are only to files in `_target` and can be undone with the refresh command above.  Use the flag `--dryrun` to see what will be modified without modifying it.)
 
 ```bash
-python3 tools/refresh.py
+python3 tools/insert_proof_recording_code.py
 ```
 
 (Optional)  It's helpful to compile the base lean to make sure the modifications worked.  No trace code will show since certain options are not set.
@@ -72,3 +72,17 @@ This will add the following to the data directory:
     ````
 
     (Further cleaning may be neccessary to properly handle missing values.) Each row (within a table) is uniquely keyed by the "filename" and "key" columns.
+
+## Customizations and Improvements
+
+The information traced by these tools may not be the information that another user needs.  
+
+For that reason, these tools make it easy to add custom tracing code.  The tracing code is stored in `lean_modifications`.  Feel free to add additional traces (following the examples there).  The best places to add new code are where it is labeled "BEGIN/END CUSTOMIZABLE CODE".
+
+Some additional ideas for tracing:
+
+* Trace goal, hypothesis, or parameter expressions into another form, e.g. as s-expressions (or other abstract syntax tree) or using the pp.all=true form
+* Trace type information about expressions or their parts.  For example, knowing is an expression is of type Prop or not
+* Trace simp lemmas available in the environment
+
+All of these are fairly easy to add, but may slow down the time to trace all of mathlib.
