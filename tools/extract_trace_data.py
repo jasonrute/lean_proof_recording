@@ -5,8 +5,6 @@ import sys
 import json
 from pathlib import Path
 
-from pip._internal.utils import typing
-
 from tokenize_lean_files import LeanFile
 
 # the Lean messages are returned as JSON dictionaries

@@ -2,7 +2,7 @@
 
 ## Prereqs
 
-Have `elan` and `leanproject` installed.  The scripts require Python 3.8+.
+Have `elan` and `leanproject` installed.  The scripts require Python 3.7+.
 
 ## Workflow
 
@@ -59,7 +59,7 @@ All remaining steps only need the python scripts in the `tools` directory and th
 Run this command to extract the traced data into a series of tables.
 
 ```bash
-python3 extract_trace_data.py <path/to/data/directory>
+python3 tools/extract_trace_data.py <path/to/data/directory>
 ```
 
 This will add the following to the data directory:
