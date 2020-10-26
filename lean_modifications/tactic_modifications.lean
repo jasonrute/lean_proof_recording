@@ -102,6 +102,11 @@ def is_same (a b : tactic_address) : bool := (
   a.index = b.index
 )
 
+-- set the tactic state
+meta def set_state (new_state: tactic_state): tactic unit :=
+  -- this is in mathlib but easier to recreate
+  λ _, interaction_monad.result.success () new_state
+
 meta def trace_tactic_state_data (addr: tactic_address) (finished : bool) := do
 -- BEGIN CUSTOMIZABLE CODE
 -- customize as needed to record different
@@ -116,7 +121,8 @@ trace_data_string "tactic_state" ts_key "before_after" temporal,
 
 -- environment (just store fingerprints)
 env <- tactic.get_env,
-trace_data_num "tactic_state" ts_key "env_fingerprint" env.fingerprint,
+-- store fingerprint as a string to prevent large values errors
+trace_data_string "tactic_state" ts_key "env_fingerprint" (repr env.fingerprint),
 
 -- goal stack information
 goals <- tactic.get_goals,
@@ -127,9 +133,14 @@ goals.enum.mmap' $ λ ⟨n, g⟩, (do
   let g_key := ts_key ++ ":" ++ (repr n),
   trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
   trace_data_num "tactic_state_goal" g_key "ix" n,
+  -- store hash of goal metavariable to know if goal changed
   trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
-  fmt <- tactic.pp g,
-  trace_data_string "tactic_state_goal" g_key "goal_pp" fmt.to_string
+  -- pretty print the goal by temporarily making it the only goal
+  saved_ts <- tactic.read, -- copy tactic state
+  tactic.set_goals [g],
+  ts <- tactic.read, -- temporary tactic state
+  trace_data_string "tactic_state_goal" g_key "goal_pp" ts.to_format.to_string,
+  set_state saved_ts -- put tactic state back to way it was
 ),
 return ()
 -- END CUSTOMIZABLE CODE
