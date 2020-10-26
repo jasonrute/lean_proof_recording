@@ -1,151 +1,118 @@
-import collections
-import pandas as pd
+from io import TextIOWrapper
+from typing import Any, Dict, List, Tuple
 from pprint import pprint
 import sys
 import json
 from pathlib import Path
 
+from pip._internal.utils import typing
+
 from tokenize_lean_files import LeanFile
 
-def extract_trace_blocks(stdout_file):
+# the Lean messages are returned as JSON dictionaries
+LeanMessage = Dict[str, Any]
+
+# we will store data in "DataTables", which are lists of json dictionaries
+# the dictionary keys form the columns of the tabular data.
+TableRow = Dict[str, Any]
+DataTable = List[TableRow]
+
+def seperate_lean_messages(stdout_file: TextIOWrapper) -> Tuple[List[LeanMessage], List[LeanMessage]]:
     trace_blocks = []
     other_blocks = []
     for line in stdout_file:
         if line:
             s = line
-            d = json.loads(s)
-            if d['severity'] == 'information' and d['caption'] == "trace output":
-                trace_blocks.append(d)
+            message: LeanMessage = json.loads(s)
+            if message['severity'] == 'information' and message['caption'] == "trace output":
+                trace_blocks.append(message)
             else:
-                other_blocks.append(d)
+                other_blocks.append(message)
 
     return trace_blocks, other_blocks
 
-def read_path_map(data_dir):
-    with open(data_dir+"path_map.json", 'r') as f:
+def read_path_map(data_dir: Path) -> Dict[Path, Path]:
+    with open(data_dir/"path_map.json", 'r') as f:
         for line in f:
-            return json.loads(line)
+            return {Path(p1): Path(p2) for p1, p2 in json.loads(line).items()}
+    raise Exception()
 
-def read_trace_blocks(data_dir):
-    with open(data_dir+"lean_stdout.log", 'r') as f:
-        return extract_trace_blocks(f)
+def read_lean_messages(data_dir: Path) -> Tuple[List[LeanMessage], List[LeanMessage]]:
+    with open(data_dir/"lean_stdout.log", 'r') as f:
+        return seperate_lean_messages(f)
 
-def file_suffix(path_map, filename):
+def relative_path(path_map: Dict[Path, Path], filename: Path):
     for p in path_map:
-        if filename.startswith(p):
-            return path_map[p]+filename[len(p):]
+        if p in filename.parents:
+            return path_map[p]/filename.relative_to(p)
+    raise Exception()
 
-def extract_tables(trace_blocks, path_map):
-    data_tables = {}
-    for info_block in trace_blocks:
-        file_name = file_suffix(path_map, info_block['file_name'])
-        pos_line = info_block['pos_line'] # lean 1-indexes rows
-        pos_column = info_block['pos_col'] + 1 # lean 0-indexes columns (but we 1-index)
-        # TODO: Add different tables which can be read from the json traces
-        table_name = "tactic_trace"
-        for line in info_block['text'].split("\n"):
+def extract_data_tables(trace_messages: List[LeanMessage], path_map: Dict[Path, Path]) -> Dict[str, DataTable]:
+    tables = {}
+    for info_message in trace_messages:
+        file_path = str(relative_path(path_map, Path(info_message['file_name'])))
+        pos_line = info_message['pos_line'] # lean 1-indexes rows
+        pos_column = info_message['pos_col'] + 1 # lean 0-indexes columns (but we 1-index)
+        for line in info_message['text'].split("\n"):
             if line.startswith('<PR>'):
                 _, json_string = line.split(" ", 1)
-                d = json.loads(json_string)
-                d['filename'] = file_name
-                d['pos_line'] = pos_line
-                d['pos_column'] = pos_column
+                traced_data: Dict[str, Any] = json.loads(json_string)
+                assert "key" in traced_data, traced_data
+                assert "table" in traced_data, traced_data
+                traced_data['filename'] = file_path
+                traced_data['trace_pos_line'] = pos_line
+                traced_data['trace_pos_column'] = pos_column
                 
-                # TODO: Make this more general.  
-                # Maybe traces should be of the form: {'table_name': ..., 'key': ..., 'column1': ..., 'column2': ...}
-                key = hash((file_name, d['line'], d['column'], d['depth'], d['index']))
-                
-                if table_name not in data_tables:
-                    data_tables[table_name] = {}
+                table_name = traced_data['table']
+                key = traced_data['key']  # only unique within a file and table
 
-                if key not in data_tables[table_name]:
-                    data_tables[table_name][key] = collections.defaultdict(lambda: None)
+                if table_name not in tables:
+                    table = tables[table_name] = {}
+                else:
+                    table = tables[table_name]
 
-                data_tables[table_name][key].update(d)
-        
-    return data_tables
+                # the "key" in the trace data is unique only within a file
+                if (file_path, key) not in table:
+                    table[file_path, key] = {}
 
-def save_tables(data_tables, cache_file):
-    with open(cache_file, 'w') as f:
-        for table_name, table in data_tables.items():
-            for key, row in table.items():
-                row['key'] = key
-                row['table_name'] = table_name
-                s = json.dumps(row)
-                f.write(s+"\n")
+                table[file_path, key].update(traced_data)
 
-def load_tables(cache_file):
-    data_tables = {}
-    with open(cache_file, 'r') as f:
-        for line in f:
-            if line != "\n":
-                d = json.loads(line)
-                table_name = d['table_name']
-                key = d['key']
+    # ignore the row keys since it will just be saved to raw json
+    return {name: list(t.values()) for name, t in tables.items()}
 
-                if table_name not in data_tables:
-                    data_tables[table_name] = {}
+def save_other_lean_messages(messages: List[LeanMessage], data_dir: Path):
+    with open(data_dir/"lean_errors.json", 'w') as outfile:
+        json.dump(messages, outfile, indent=4)
 
-                if key not in data_tables[table_name]:
-                    data_tables[table_name][key] = collections.defaultdict(lambda: None)
+def save_data_tables(data_tables: Dict[str, DataTable], data_dir: Path):
+    dir = data_dir/"raw_traced_data"
+    dir.mkdir()
+    for table_name, table in data_tables.items():
+        # save each table to a file
+        filename = table_name + ".json"
+        with open(dir/filename, 'w') as outfile:
+            json.dump(table, outfile)
 
-                data_tables[table_name][key].update(d)
-    return data_tables
-
-
-def extract_lean_file_list(trace_blocks, path_map):
-    file_list = set()
-    for info_block in trace_blocks:
-        file_name = file_suffix(path_map, info_block['file_name'])
-        file_list.add(file_name)
-    return list(sorted(file_list))
-
-def extract_tokenized_lean_files(data_dir, file_list):
-    lean_files = {}
-    for file in file_list:
-        file_path = data_dir + "lean_files/" + file
-        lean_files[file] = LeanFile(file_path)
-    return lean_files
-
-def extract_data(data_dir):
+def extract_data(data_dir: Path) -> None:
     path_map = read_path_map(data_dir)
-    trace_blocks, other_blocks = read_trace_blocks(data_dir)
+    trace_messages, other_messages = read_lean_messages(data_dir)
 
-    for o in other_blocks:
-        print("Unexpected output:")
-        pprint(o)
+    for m in other_messages:
+        print("Unexpected lean output message:")
+        pprint(m)
 
-    if Path(data_dir+"_record_cache.json").exists():
-        data_tables = load_tables(data_dir+"_record_cache.json")
-    else:
-        data_tables = extract_tables(trace_blocks, path_map)
-        save_tables(data_tables, data_dir+"_record_cache.json")
+    save_other_lean_messages(other_messages, data_dir)
 
-    # would be better to store a file list in the data directory
-    # or just get all files from the data directory.
-    # for now we will hack it using the trace_blocks
-    file_list = extract_lean_file_list(trace_blocks, path_map)
-    lean_files = extract_tokenized_lean_files(data_dir, file_list)
-
-    return (data_tables, lean_files)
+    data_tables = extract_data_tables(trace_messages, path_map)
+    save_data_tables(data_tables, data_dir)
 
 def main():
     assert len(sys.argv) == 2
-    data_dir = sys.argv[1]
-    assert data_dir.endswith("/")
+    data_dir = Path(sys.argv[1])
+    assert data_dir.exists(), data_dir
+    assert data_dir.is_dir(), data_dir
     
-    data_tables, lean_files = extract_data(data_dir)
-
-    # just as a previous, print using pandas
-    for table_name in data_tables:
-        print(table_name)
-        print(pd.DataFrame(list(data_tables[table_name].values())))
-
-    # also print the first line of the tokenized files
-    for name, lean_file in lean_files.items():
-        print(name)
-        print(lean_file.lines[0])
-        break
+    extract_data(data_dir)
 
 if __name__ == "__main__":
     main()
