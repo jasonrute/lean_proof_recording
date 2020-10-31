@@ -180,7 +180,7 @@ match (finished, is_same prev_addr prev_open_addr) with
   trace_tactic_data_num new_addr "line" new_addr.line,
   trace_tactic_data_num new_addr "column" new_addr.column,
   trace_tactic_data_num new_addr "depth" new_addr.depth,
-  trace_tactic_data_num new_addr "index" new_addr.depth,
+  trace_tactic_data_num new_addr "index" new_addr.index,
   trace_tactic_data_addr new_addr "proof" new_proof_addr,
   trace_tactic_data_addr new_addr "block" new_block_addr,
   trace_tactic_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
@@ -218,7 +218,7 @@ match (finished, is_same prev_addr prev_open_addr) with
   trace_tactic_data_num new_addr "line" new_addr.line,
   trace_tactic_data_num new_addr "column" new_addr.column,
   trace_tactic_data_num new_addr "depth" new_addr.depth,
-  trace_tactic_data_num new_addr "index" new_addr.depth,
+  trace_tactic_data_num new_addr "index" new_addr.index,
   trace_tactic_data_addr new_addr "proof" proof_addr,
   trace_tactic_data_addr new_addr "block" block_addr,
   trace_tactic_data_addr new_addr "parent" prev_open_addr, -- will be ⟨0,0,0,0⟩ if no parent
