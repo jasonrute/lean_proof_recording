@@ -4,8 +4,7 @@ Tools for parsing lean files into tokens
 import collections
 import dataclasses
 import enum
-from typing import Generator, List, Union
-
+from typing import Generator, List, Union, Optional
 
 class TokenType(enum.Enum):
     LINE_COMMENT = 1
@@ -37,7 +36,7 @@ class Token:
     end_column: int
 
 # there are other tokens as well, but these are important and/or easy to work with
-SPECIAL_TOKENS_PARTS = [["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
+SPECIAL_TOKENS_PARTS = [["`", "["], ["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
 # make sure they are sorted longest first
 SPECIAL_TOKENS = list(sorted(SPECIAL_TOKENS_PARTS, key=len, reverse=True))
 
@@ -54,7 +53,7 @@ class LeanFile:
         with open(filename, 'r') as f:
             for line in f:
                 lines.append(line)
-        
+
         # tokenize
         self.lines = []
         prev_token_type = TokenType.BOF
@@ -64,17 +63,17 @@ class LeanFile:
             self.lines.append(tokens)
         final_token = self.lines[-1][-1]
         eof = Token(
-            string="", 
-            type=TokenType.EOF, 
-            line=final_token.line, 
-            column=final_token.end_column, 
+            string="",
+            type=TokenType.EOF,
+            line=final_token.line,
+            column=final_token.end_column,
             end_column=final_token.end_column
         )
         self.lines[-1].append(eof)
 
     # this isn't completely accurate.  I think it also will capture
     # - char literals, e.g. 'a'
-    # - 
+    # -
     # see https://github.com/leanprover/lean/blob/master/src/util/name.cpp
     @staticmethod
     def is_name_char(c: str):
@@ -102,7 +101,7 @@ class LeanFile:
             (0x1d62  <= u and u <= 0x1d6a)):               # letter-like subscripts
             return True
         return False
-        
+
     @staticmethod
     def tokenize_line(line: str, line_num: int, prev_token_type: TokenType) -> List[Token]:
         assert prev_token_type in [TokenType.BOF, TokenType.WHITESPACE, TokenType.BLOCK_COMMENT, TokenType.LINE_COMMENT, TokenType.STRING_LITERAL], (line, line_num, prev_token_type)
@@ -137,11 +136,11 @@ class LeanFile:
                 char_type = TokenType.ALPHANUMERIC
             else:
                 char_type = TokenType.SYMBOL
-            
+
             char_types.append(char_type)
             prev_char_type = char_type
             prev_char = char
-        
+
         # step 2: join certain char_type pairs
         tokens = []
 
@@ -158,7 +157,7 @@ class LeanFile:
         token_start = 0
         i = 0
         prev_char_type = char_types[0]
-        
+
         for char, char_type in zip(line[1:], char_types[1:]):
             i += 1
             if prev_char_type == TokenType.BLOCK_COMMENT and char_type == TerminalType.BLOCK_COMMENT_TERMINAL:
@@ -176,7 +175,7 @@ class LeanFile:
             prev_char_type = char_type
         assert len(line) == len(token_string) + token_start, (token_start, len(line), token_string)
         tokens.append(Token(token_string, token_type, line_num, token_start, len(line)))
-        
+
         # step 3: combine certain tokens
         combined_tokens = []
         i = 0
@@ -198,12 +197,12 @@ class LeanFile:
             else:
                 new_token = tokens[i]
                 i2 = i + 1
-            
+
             combined_tokens.append(new_token)
             i = i2
 
         return combined_tokens
-    
+
     def get_token(self, line: int, column: int) -> Token:
         assert line < len(self.lines)
         for token in self.lines[line]:
@@ -212,9 +211,9 @@ class LeanFile:
                 continue
             if token.column == column:
                 return token
-            
+
         assert False
-    
+
     def get_token_pos(self, line: int, column: int) -> int:
         assert line < len(self.lines)
         assert column <= self.lines[line][-1].column, (column, self.lines[line])
@@ -232,36 +231,38 @@ class LeanFile:
             for token in line[start_pos:]:
                 yield token
             start_pos = 0
-    
+
     def iter_tokens_left(self, start_line: int, start_column: int) -> Generator[Token, None, None]:
         start_pos = self.get_token_pos(start_line, start_column)
         for line in reversed(self.lines[0:start_line+1]):
             for token in reversed(line[0: start_pos]):  # don't include current token
                 yield token
             start_pos = None
-    
+
     def slice_tokens(self, start_line: int, start_column: int, end_line: int, end_column: int) -> List[Token]:
         return [
-            t for t in self.iter_tokens_right(start_line, start_column) 
+            t for t in self.iter_tokens_right(start_line, start_column)
             if (t.line, t.column) < (end_line, end_column)
         ]
-    
+
     def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int) -> str:
         tokens = self.slice_tokens(start_line, start_column, end_line, end_column)
         return "".join(t.string for t in tokens)
-    
-    def find_pattern(self, pattern: List[Union[str, TokenType]]) -> Generator[List[Token], None, None]:
-        """
-        Search for a pattern.
 
-        pattern: A list of either strings (to match to tokens exactly) 
-                 or token types (also matching exactly to tokens).
-        """
-        def token_matches_pattern(t: Token, p: Union[str, TokenType]):
+    @staticmethod
+    def token_matches_pattern(t: Token, p: Union[str, TokenType]):
             if isinstance(p, str):
                 return t.string == p
             else:
                 return t.type == p
+
+    def find_pattern(self, pattern: List[Union[str, TokenType]]) -> Generator[List[Token], None, None]:
+        """
+        Search for a pattern.
+
+        pattern: A list of either strings (to match to tokens exactly)
+                 or token types (also matching exactly to tokens).
+        """
 
         tokens = collections.deque([])
         for t in self.iter_tokens_right(0, 0):
@@ -270,9 +271,42 @@ class LeanFile:
             else:
                 tokens.append(t)
                 tokens.popleft()
-                if all(token_matches_pattern(t, p) for t, p in zip(tokens, pattern)):
+                if all(self.token_matches_pattern(t, p) for t, p in zip(tokens, pattern)):
                     yield list(tokens)
 
+    def get_prev_matching_pattern(self, line: int, column: int, patterns: List[Union[str, TokenType]]) -> Optional[Token]:
+        for t in self.iter_tokens_left(line, column):
+            if any(self.token_matches_pattern(t, p) for p in patterns):
+                return t
+        return None
+
+    def get_next_matching_pattern(self, line: int, column: int, patterns: List[Union[str, TokenType]]) -> Optional[Token]:
+        for t in self.iter_tokens_right(line, column):
+            if any(self.token_matches_pattern(t, p) for p in patterns):
+                return t
+        return None
+
+    def find_left_bracket(self, lefts: List[str], rights: List[str], line: int, column: int) -> Optional[Token]:
+        stack_depth = 1 # iter_tokens_left skips the current token, so start counter at 1
+        for t in self.iter_tokens_left(line, column):
+            if any(self.token_matches_pattern(t, l) for l in lefts):
+                stack_depth -= 1
+                if not stack_depth:
+                    return t
+            elif any(self.token_matches_pattern(t, l) for l in rights):
+                stack_depth += 1
+        return None
+
+    def find_right_bracket(self, lefts: List[str], rights: List[str], line: int, column: int) -> Optional[Token]:
+        stack_depth = 0
+        for t in self.iter_tokens_left(line, column):
+            if any(self.token_matches_pattern(t, l) for l in rights):
+                stack_depth -= 1
+                if not stack_depth:
+                    return t
+            elif any(self.token_matches_pattern(t, l) for l in lefts):
+                stack_depth += 1
+        return None
 
 if __name__ == "__main__":
     #filename = "tmp/proof_recording_example.lean"
