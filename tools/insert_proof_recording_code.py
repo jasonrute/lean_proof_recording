@@ -159,10 +159,10 @@ class ModifyInterativeParameters:
         raise Exception("Could not extract parser.")
 
     def process_param_expr(self, param_expr: AST.Expr, param_ix: int) -> Optional[InteractiveParameter]:
-        for parse_command in [['parse'], ['interative', '.', 'parse']]:
+        for parse_command in [['parse'], ['interactive', '.', 'parse']]:
             if self.expr_begins_with(param_expr, parse_command):
                 return self.extract_parser(param_expr, param_ix, len(parse_command))
-        for itactic_command in [['itactic'], ['interative', '.', 'itactic'], ['tactic', '.', 'interative', '.', 'itactic'], ['conv', '.', 'interative', '.', 'itactic']]:
+        for itactic_command in [['itactic'], ['interactive', '.', 'itactic'], ['tactic', '.', 'interactive', '.', 'itactic'], ['conv', '.', 'interactive', '.', 'itactic']]:
             if self.expr_begins_with(param_expr, itactic_command):
                 return InteractiveParameter(
                     pos=Position(
@@ -301,7 +301,14 @@ class ModifyInterativeParameters:
         try:
             # parse the defintion
             parser = LeanParser(lean_file, line, column)
-            parser.read_token("def")
+            parser.read_token("meta")
+            parser.consume_space()
+            if parser.is_token("def"):
+                parser.read_token("def")
+            elif parser.is_token("definition"):
+                parser.read_token("definition")
+            else:
+                return None
             ast = parser.read_def()
         except:
             print()
@@ -336,7 +343,7 @@ class ModifyInterativeParameters:
     def find_and_modify(self, file: Path, dryrun=bool):
         lean_file = LeanFile(str(file))
         modifications: List[Modification] = []
-        for tokens in lean_file.find_pattern([TokenType.WHITESPACE, "def"]):
+        for tokens in lean_file.find_pattern([TokenType.WHITESPACE, "meta"]):
             mod = self.find_def_mod(lean_file, tokens[-1].line, tokens[-1].column)
             if mod is not None:
                 modifications.append(mod)
