@@ -12,6 +12,12 @@ def get_traced_data(data_dir: Path, table: str) -> List[Dict[str, Any]]:
     with open(data_dir / "raw_traced_data" /(table + ".json"), "r") as f:
         return json.load(f)
 
+def save_data(data_dir: Path, table: List[Dict[str, Any]], filename: str) -> None:
+    dir = data_dir/"extracted_data"
+    dir.mkdir(exist_ok=True)
+    with open(dir /(filename + ".json"), "w") as f:
+        return json.dump(table, f)
+
 def remove_index_from_key(key: str) -> str:
     """The key is of the form <line>:<col>:<depth>:<index>"""
     return ":".join(key.split(":")[:3])
@@ -182,7 +188,7 @@ def build_ast_data(ast: AST.ASTData, depth: int, ast_data: List[Dict[str, Any]])
     else:
         raise Exception(ast)
 
-def process_file(lean_file: LeanFile, tactic_params_pos_data: List[Dict['str', Any]], tactic_symbol_data: List[Dict['str', Any]]):
+def parse_ast_data(lean_file: LeanFile, relative_filename: str, tactic_params_pos_data: List[Dict['str', Any]], tactic_symbol_data: List[Dict['str', Any]]) -> List[Dict['str', Any]]:
     tactic_symbol_data.sort(key=lambda tac: (tac['line'], tac['column']))
     tactic_params_pos_data.sort(key=lambda param: (param['line'], param['column']))
 
@@ -193,6 +199,7 @@ def process_file(lean_file: LeanFile, tactic_params_pos_data: List[Dict['str', A
 
     evaluated_positions = collections.Counter()
 
+    ast_data = []
     for tac in tactic_symbol_data:
         try:
             line = tac["line"] - 1
@@ -215,15 +222,19 @@ def process_file(lean_file: LeanFile, tactic_params_pos_data: List[Dict['str', A
             build_ast_data(ast, 0, new_ast_data)
 
             for node in new_ast_data:
+                node['filename'] = relative_filename
                 node['string'] = lean_file.slice_string(node['line']-1, node['column']-1, node['end_line']-1, node['end_column']-1)
-                #print(node['type'], node['string'])
-                # TODO: Make sure don't have off-by-one error here
                 evaluated_positions[node["line"]-1, node["column"]-1] += 1
+            
+            ast_data.extend(new_ast_data)
+
         except Exception as e:
-            #print(e)
+            # print(e)
             print(lean_file.filename)
             traceback.print_exc()
 
+    return ast_data
+    
 def main():
     assert len(sys.argv) == 2
     data_dir = Path(sys.argv[1])
@@ -238,17 +249,25 @@ def main():
 
     files = sorted({row['filename'] for row in tactic_pos_data})
 
+    ast_data = []
+    tactic_symbol_data = []
     for relative_file_path in files:
+        file_path = Path(data_dir) / "lean_files" / relative_file_path
+        # print(file_path)
         try:
             file_tactic_params_pos_data, file_tactic_pos_data = filter_data(relative_file_path, tactic_params_pos_data, tactic_pos_data)
-            file_path = Path(data_dir) / "lean_files" / relative_file_path
-            print(file_path)
             lean_file = LeanFile(str(file_path))
             file_tactic_symbol_data = build_tactic_symbol_data(lean_file, file_tactic_pos_data)
-            process_file(lean_file, file_tactic_params_pos_data, file_tactic_symbol_data)
+            tactic_symbol_data.extend(file_tactic_symbol_data)
+            file_ast_data = parse_ast_data(lean_file, relative_file_path, file_tactic_params_pos_data, file_tactic_symbol_data)
+            ast_data.extend(file_ast_data)
         except Exception:
             print(file_path)
             traceback.print_exc()
+
+    save_data(data_dir, tactic_pos_data, "tactic_pos")
+    save_data(data_dir, tactic_symbol_data, "tactic_symbol")
+    save_data(data_dir, ast_data, "ast")
 
 if __name__ == "__main__":
     main()
