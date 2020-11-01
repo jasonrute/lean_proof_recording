@@ -19,7 +19,9 @@ COMMANDS = {"theorem", "axiom", "axioms", "variable", "protected", "private", "h
          "attribute", "instance", "include", "omit", "init_quotient",
          "declare_trace", "add_key_equivalence",
          "run_cmd", "#check", "#reduce", "#eval", "#print", "#help", "#exit",
-         "#compile", "#unify", "lemma", "def"}
+         "#compile", "#unify", "lemma", "def", "alias", "open_locale", "add_decl_doc",
+         "library_note", "localized", "add_hint_tactic"
+}
 
 ARROWS = {'->', '→'}
 BINDERS = {'assume', 'Pi', 'forall', '∀', 'Π', 'Σ', '∑', '∏', 'exists', '∃', 'λ', 'fun', '⨆', '⋂', '⋃', '∫', '∫⁻', '⨁'}
@@ -274,11 +276,14 @@ class LeanParser:
     def is_eof(self) -> bool:
         return self.current_token.type == TokenType.EOF
 
-    def raise_error(self, msg: str):
+    def format_file_location(self) -> str:
         line_str = "".join(t.string for t in self.token_lines[self.line])
         file_location = f"{self.lean_file.filename}:{self.line+1}:{self.column+1}"
-        raise Exception(f"{msg}:\n{file_location}\n{self.line:04}: {line_str}      {' ' * self.column}{'^' * len(self.current_token.string)}")
-
+        return f"{file_location}\n{self.line:04}: {line_str}      {' ' * self.column}{'^' * len(self.current_token.string)}"
+    
+    def raise_error(self, msg: str):
+        raise Exception(f"{msg}:\n{self.format_file_location()}")
+    
     # medium level parsing
     def start_pos(self) -> Tuple[int, int]:
         return (self.current_token.line, self.current_token.column)
@@ -765,6 +770,8 @@ class LeanParser:
                 # - itactic environment for some strange monad
                 # - `[...]
                 param_line, param_column = self.start_pos()
+                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(self.format_file_location())
                 self.consume_matching_brackets()
                 self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
@@ -776,6 +783,8 @@ class LeanParser:
                 ))
             elif self.is_alphanum() and self.peek().string.isnumeric():
                 param_line, param_column = self.start_pos()
+                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(self.format_file_location())
                 self.read_alphanum()
                 param_end_line, param_end_column = self.start_pos()
                 parameters.append(AST.TacticParam(
@@ -785,10 +794,12 @@ class LeanParser:
                     end_column=param_end_column
                 ))
                 self.consume_space()
-            elif self.is_token_in(COMMANDS):
+            elif self.is_token_in(COMMANDS | {"else", "in"}):
                 break
             elif self.is_alphanum():
                 param_line, param_column = self.start_pos()
+                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(self.format_file_location())
                 self.read_full_name()
                 param_end_line, param_end_column = self.start_pos()
                 parameters.append(AST.TacticParam(
@@ -847,6 +858,8 @@ class LeanParser:
                 end_line=end_line,
                 end_column=end_column
             )
+        elif self.is_token("do"):
+            self.raise_error('Parsing "do" tactic in interactive mode not yet implemented')
         else:
             return self.read_named_tactic()
 
