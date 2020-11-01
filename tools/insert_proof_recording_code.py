@@ -85,11 +85,12 @@ def insert_param_tracing_code(dryrun: bool):
     modifier.build_file(dryrun=dryrun)
 
     # conv interactive
-    _, l2 = find_code_location(CONV_INTERACTIVE_LEAN_FILE, CONV_ITACTIC_CODE)
-    tactic_recording_code = get_modification(CONV_INTERACTIVE_LEAN_FILE_MODIFICATIONS)
-    modifier = LeanModifier(CONV_INTERACTIVE_LEAN_FILE)
-    modifier.add_lines(l2, tactic_recording_code)
-    modifier.build_file(dryrun=dryrun)
+    # FIXME: This doesn't work as expected.  Commenting it out for now.
+    # _, l2 = find_code_location(CONV_INTERACTIVE_LEAN_FILE, CONV_ITACTIC_CODE)
+    # tactic_recording_code = get_modification(CONV_INTERACTIVE_LEAN_FILE_MODIFICATIONS)
+    # modifier = LeanModifier(CONV_INTERACTIVE_LEAN_FILE)
+    # modifier.add_lines(l2, tactic_recording_code)
+    # modifier.build_file(dryrun=dryrun)
 
 @dataclasses.dataclass
 class Position:
@@ -171,7 +172,7 @@ class ModifyInterativeParameters:
                         param_expr.expr_parts[len(itactic_command)-1].end_line, 
                         param_expr.expr_parts[len(itactic_command)-1].end_column
                     ),
-                    command=".".join(itactic_command),
+                    command="".join(itactic_command),
                     param_ix=param_ix
                 )
         return None
@@ -217,12 +218,16 @@ class ModifyInterativeParameters:
                     parser = "conv.interactive.pr.recorded_itactic"
                 else:
                     raise Exception(f'Unexpected monad type: {monad_type}')
-
-                s += "interactive.parse ("
-                s += parser
-                #s += " " + json.dumps(tactic_name)  # easiest way to escape strings 
-                #s += " " + str(param.param_ix)
-                s += ") "
+                
+                # FIXME: Conv not working right, so skip it
+                if parser.startswith("tactic"):
+                    s += "interactive.parse ("
+                    s += parser
+                    #s += " " + json.dumps(tactic_name)  # easiest way to escape strings 
+                    #s += " " + str(param.param_ix)
+                    s += ") "
+                else:
+                    s += param.command
             elif param.command == 'parse':
                 s += "interactive.parse (interactive.pr.recorded"
                 #s += " " + json.dumps(tactic_name)  # easiest way to escape strings
