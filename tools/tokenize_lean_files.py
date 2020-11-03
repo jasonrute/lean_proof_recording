@@ -245,9 +245,23 @@ class LeanFile:
             if (t.line, t.column) < (end_line, end_column)
         ]
 
-    def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int) -> str:
+    def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int, clean: bool = False) -> str:
         tokens = self.slice_tokens(start_line, start_column, end_line, end_column)
-        return "".join(t.string for t in tokens)
+        if clean:
+            # remove comments, newlines, and extra whitespace
+            strings = []
+            in_whitespace = True
+            for t in tokens:
+                if t.type in (TokenType.WHITESPACE, TokenType.LINE_COMMENT, TokenType.BLOCK_COMMENT):
+                    if in_whitespace is False:
+                        strings.append(" ")
+                        in_whitespace = True
+                else:
+                    strings.append(t.string)
+                    in_whitespace = False
+            return "".join(strings).strip()
+        else:
+            return "".join(t.string for t in tokens)
 
     @staticmethod
     def token_matches_pattern(t: Token, p: Union[str, TokenType]):

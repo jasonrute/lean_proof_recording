@@ -167,7 +167,7 @@ class AST:
 
     @dataclasses.dataclass
     class ITacticTacticParam(TacticParam):
-        tactics: List['AST.Tactic']
+        tactic: 'AST.ITactic'
 
     @dataclasses.dataclass
     class Tactic(ASTData):
@@ -198,6 +198,7 @@ class AST:
         first_semicolon_column: int
         semicolon_line: int
         semicolon_column: int
+        semicolon_count: int
 
     @dataclasses.dataclass
     class SemicolonListTactic(Tactic):
@@ -207,11 +208,14 @@ class AST:
         first_semicolon_column: int
         semicolon_line: int
         semicolon_column: int
+        semicolon_count: int
 
     @dataclasses.dataclass
     class AlternativeTactic(Tactic):
         tactic1: 'AST.Tactic'
         tactic2: 'AST.Tactic'
+        alternative_line: int
+        alternative_column: int
 
     @dataclasses.dataclass
     class ByProof(ASTData):
@@ -228,7 +232,9 @@ class LeanParser:
     column: int
     pos: int
     current_token: Token
-    def __init__(self, lean_file: LeanFile, line: int, column: int, parameter_positions=None):
+    parameter_positions: Dict[Tuple[int, int], List[Tuple[int, int]]]
+    tactic_block_positions: Set[Tuple[int, int]]
+    def __init__(self, lean_file: LeanFile, line: int, column: int, parameter_positions=None, tactic_block_positions=None):
         """
         Start parser on this file and this position
         """
@@ -247,6 +253,7 @@ class LeanParser:
         self.pos = pos
         self.current_token = current
         self.parameter_positions = {} if parameter_positions is None else parameter_positions
+        self.tactic_block_positions = set() if tactic_block_positions is None else tactic_block_positions
 
     # low level parser stuff
     def peek(self) -> Token:
@@ -752,18 +759,43 @@ class LeanParser:
                 param_line, param_column = self.start_pos()
                 visted_parameters.add((param_line, param_column))
                 for (param_end_line, param_end_column) in self.parameter_positions[param_line, param_column]:
-                    while self.start_pos() < (param_end_line, param_end_column):
-                        self.read_next()
-                    if self.start_pos() != (param_end_line, param_end_column):
-                        self.raise_error(f'End of parameter is in middle of a token.  Expected parameter to end at {(param_end_line, param_end_column)}')
-                    # TODO: If a tactic parameter or tactic list parameter, then zoom into tactics???
-                    parameters.append(AST.TacticParam(
-                        line=param_line,
-                        column=param_column,
-                        end_line=param_end_line,
-                        end_column=param_end_column
-                    ))
-                    self.consume_space()
+                    if (param_end_line, param_end_column) > self.start_pos() and self.start_pos() in self.tactic_block_positions:
+                        # this is an itactic parameter
+                        itactic = self.read_itactic()
+                        self.consume_space()
+                        assert (param_end_line, param_end_column) == self.start_pos()
+                        parameters.append(AST.ITacticTacticParam(
+                            tactic=itactic,
+                            line=param_line,
+                            column=param_column,
+                            end_line=param_end_line,
+                            end_column=param_end_column
+                        ))
+                    else:
+                        while self.start_pos() < (param_end_line, param_end_column):
+                            self.read_next()
+                        if self.start_pos() != (param_end_line, param_end_column):
+                            self.raise_error(f'End of parameter is in middle of a token.  Expected parameter to end at {(param_end_line, param_end_column)}')
+                        # TODO: If a tactic parameter or tactic list parameter, then zoom into tactics???
+                        parameters.append(AST.TacticParam(
+                            line=param_line,
+                            column=param_column,
+                            end_line=param_end_line,
+                            end_column=param_end_column
+                        ))
+                        self.consume_space()
+            elif (self.start_pos() in self.tactic_block_positions):
+                param_line, param_column = self.start_pos()
+                itactic = self.read_itactic()
+                self.consume_space()
+                param_end_line, param_end_column = self.start_pos()
+                parameters.append(AST.ITacticTacticParam(
+                    tactic=itactic,
+                    line=param_line,
+                    column=param_column,
+                    end_line=param_end_line,
+                    end_column=param_end_column
+                ))
             elif self.is_token_in(LEFT_BRACKETS):
                 # This could be:
                 # - Optional config paramters {foo := tt}
@@ -786,6 +818,7 @@ class LeanParser:
                 print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
                 print(self.format_file_location())
                 self.read_alphanum()
+                self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
                 parameters.append(AST.TacticParam(
                     line=param_line,
@@ -793,7 +826,6 @@ class LeanParser:
                     end_line=param_end_line,
                     end_column=param_end_column
                 ))
-                self.consume_space()
             elif self.is_token_in(COMMANDS | {"else", "in"}):
                 break
             elif self.is_alphanum():
@@ -801,6 +833,7 @@ class LeanParser:
                 print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
                 print(self.format_file_location())
                 self.read_full_name()
+                self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
                 parameters.append(AST.TacticParam(
                     line=param_line,
@@ -808,7 +841,6 @@ class LeanParser:
                     end_line=param_end_line,
                     end_column=param_end_column
                 ))
-                self.consume_space()
             else:
                 break
         end_line, end_column = self.start_pos()
@@ -869,6 +901,7 @@ class LeanParser:
         line,column = self.start_pos()
         first_tactic = self.read_single_tactic()
         if self.is_token("<|>"):
+            alternative_line, alternative_column = self.start_pos()
             self.read_token("<|>")
             self.consume_space()
             second_tactic = self.read_maybe_alt_tactic()
@@ -876,6 +909,8 @@ class LeanParser:
             return AST.AlternativeTactic(
                 tactic1=first_tactic,
                 tactic2=second_tactic,
+                alternative_line=alternative_line,
+                alternative_column=alternative_column,
                 line=line,
                 column=column,
                 end_line=end_line,
@@ -915,8 +950,10 @@ class LeanParser:
         line,column = self.start_pos()
         tactic = self.read_maybe_alt_tactic()
         first_semicolon_pos = None
+        semicolon_count = 0
         while self.is_token(";"):
             semicolon_pos = self.start_pos()
+            semicolon_count += 1
             if first_semicolon_pos is None:
                 first_semicolon_pos = semicolon_pos
             self.read_token(";")
@@ -932,6 +969,7 @@ class LeanParser:
                     first_semicolon_column = first_semicolon_pos[1],
                     semicolon_line = semicolon_pos[0],
                     semicolon_column = semicolon_pos[1],
+                    semicolon_count = semicolon_count,
                     line=line,
                     column=column,
                     end_line=end_line,
@@ -947,6 +985,7 @@ class LeanParser:
                     first_semicolon_column = first_semicolon_pos[1],
                     semicolon_line = semicolon_pos[0],
                     semicolon_column = semicolon_pos[1],
+                    semicolon_count = semicolon_count,
                     line=line,
                     column=column,
                     end_line=end_line,
@@ -985,8 +1024,8 @@ class LeanParser:
 
     def read_itactic(self) -> AST.ITactic:
         line, column = self.start_pos()
-        if not self.is_token("{"):
-            self.raise_error('Expected "{"')
+        if not self.is_token_in({"{", "begin"}):
+            self.raise_error('Expected "{" or "begin"')
         tactics = self.read_tactic_list()
         end_line, end_column = self.start_pos()
         return AST.ITactic(
@@ -996,7 +1035,6 @@ class LeanParser:
             end_line=end_line,
             end_column=end_column
         )
-
 
 
 def slice(lean_file, start, end):
