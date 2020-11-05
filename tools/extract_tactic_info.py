@@ -14,12 +14,12 @@ def get_traced_data(data_dir: Path, table: str) -> List[Dict[str, Any]]:
 
 def save_data_tables(data_tables: Dict[str, List[Dict[str, Any]]], data_dir: Path):
     dir = data_dir/"extracted_proof_data"
-    dir.mkdir()
+    dir.mkdir(exist_ok=True)
     for table_name, table in data_tables.items():
         # save each table to a file
         filename = table_name + ".json"
         with open(dir/filename, 'w') as outfile:
-            json.dump(table, outfile)
+            json.dump(table, outfile, indent=2)
 
 class ProofExtractor:
     # inputs
@@ -28,17 +28,17 @@ class ProofExtractor:
     tactic_instance_data: List[Dict[str, Any]]
     tactic_position_data: List[Dict[str, Any]]
     # intermediate data sets
-    tactic_pos_data: List[Dict[str, Any]] = []
-    file_tactic_symbol_data: List[Dict[str, Any]] = []
+    tactic_pos_data: List[Dict[str, Any]]
+    file_tactic_symbol_data: List[Dict[str, Any]]
     # hints for parsing the proofs
     parameter_positions: Dict[Tuple[int, int], List[Tuple[int, int]]]
     tactic_block_positions: Set[Tuple[int, int]]
     evaluated_positions: Set[Tuple[int, int]]
     # end results
-    proof_trees: List[Dict[str, Any]] = []
-    proof_table: List[Dict[str, Any]] = []
-    tactic_table: List[Dict[str, Any]] = []
-    arg_table: List[Dict[str, Any]] = []
+    proof_trees: List[Dict[str, Any]]
+    proof_table: List[Dict[str, Any]]
+    tactic_table: List[Dict[str, Any]]
+    arg_table: List[Dict[str, Any]]
 
     def __init__(
         self, 
@@ -51,7 +51,15 @@ class ProofExtractor:
         self.relative_file_path = relative_file_path
         self.tactic_instance_data = tactic_instance_data
         self.tactic_params_pos_data = tactic_params_pos_data
-    
+
+        self.tactic_pos_data: List[Dict[str, Any]] = []
+        self.file_tactic_symbol_data: List[Dict[str, Any]] = []
+
+        self.proof_trees = []
+        self.proof_table = []
+        self.tactic_table = []
+        self.arg_table = []
+
     @staticmethod
     def remove_index_from_key(key: str) -> str:
         """The key is of the form <line>:<col>:<depth>:<index>"""
@@ -198,6 +206,14 @@ class ProofExtractor:
                 node['tactics'].append(self.extract_ast(tactic, proof_key))
             
             row['first_tactic_key'] = node['tactics'][0]['key']
+        elif isinstance(ast, AST.BracketProof):
+            node['node_type'] = "proof"
+            node['node_subtype'] = "bracket"
+            node['tactics'] = []
+            for tactic in ast.tactics:
+                node['tactics'].append(self.extract_ast(tactic, proof_key))
+            
+            row['first_tactic_key'] = node['tactics'][0]['key']
         elif isinstance(ast, AST.SemicolonListTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "semicolon_list"
@@ -250,6 +266,7 @@ class ProofExtractor:
         elif isinstance(ast, AST.ITacticTacticParam):
             node['node_type'] = "tactic_arg"
             node['node_subtype'] = "itactic"
+            node['tactic'] = self.extract_ast(ast.tactic, proof_key)
         elif isinstance(ast, AST.TacticParam): # TODO: Change parser here to return a subtype
             node['node_type'] = "tactic_arg"
             node['node_subtype'] = "expression"
@@ -289,6 +306,11 @@ class ProofExtractor:
                     parser_ast = parser.read_by()
                 elif tac['preceeding_symbol'] == "begin":
                     parser_ast = parser.read_begin()
+                elif tac['preceeding_symbol'] == "{":
+                    # this should only happen in the rare case
+                    # that this is a {...} proof inside a
+                    # have or show in a term proof.
+                    parser_ast = parser.read_bracket_proof()
                 else:
                     raise Exception(f"This tactic should already have been processed: {tac}")
 
@@ -297,12 +319,11 @@ class ProofExtractor:
                 # to the evaluated_positions set
                 proof_tree = self.extract_ast(parser_ast)
                 self.proof_trees.append(proof_tree)
-                
+
             except Exception as e:
                 # print(e)
                 print(self.lean_file.filename)
                 traceback.print_exc()
-
 
 def main():
     assert len(sys.argv) == 2
@@ -318,18 +339,18 @@ def main():
     files = sorted({row['filename'] for row in tactic_instance_data})
     for relative_file_path in files:
         file_path = Path(data_dir) / "lean_files" / relative_file_path
-        # print(file_path)
+        print(file_path)
         try:
             lean_file = LeanFile(str(file_path))
 
-            tactic_instance_data = [row for row in tactic_instance_data if row['filename'] == relative_file_path]
-            tactic_params_pos_data = [row for row in tactic_params_pos_data if row['filename'] == relative_file_path]
+            file_tactic_instance_data = [row for row in tactic_instance_data if row['filename'] == relative_file_path]
+            file_tactic_params_pos_data = [row for row in tactic_params_pos_data if row['filename'] == relative_file_path]
             
             proof_extractor = ProofExtractor(
                 lean_file=lean_file, 
                 relative_file_path=relative_file_path,
-                tactic_instance_data=tactic_instance_data,
-                tactic_params_pos_data=tactic_params_pos_data
+                tactic_instance_data=file_tactic_instance_data,
+                tactic_params_pos_data=file_tactic_params_pos_data
             )
             proof_extractor.run()
 

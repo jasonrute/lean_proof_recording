@@ -224,6 +224,10 @@ class AST:
     @dataclasses.dataclass
     class BeginProof(ASTData):
         tactics: List['AST.Tactic']
+    
+    @dataclasses.dataclass
+    class BracketProof(ASTData):
+        tactics: List['AST.Tactic']
 
 class LeanParser:
     lean_file: LeanFile
@@ -1015,6 +1019,20 @@ class LeanParser:
         tactics = self.read_tactic_list()
         end_line, end_column = self.start_pos()
         return AST.BeginProof(
+            tactics=tactics,
+            line=line,
+            column=column,
+            end_line=end_line,
+            end_column=end_column
+        )
+    
+    def read_bracket_proof(self) -> AST.BracketProof:
+        line, column = self.start_pos()
+        if not self.is_token("{"):
+            self.raise_error('Expected "{"')
+        tactics = self.read_tactic_list()
+        end_line, end_column = self.start_pos()
+        return AST.BracketProof(
             tactics=tactics,
             line=line,
             column=column,
