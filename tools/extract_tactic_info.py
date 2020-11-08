@@ -29,11 +29,14 @@ class ProofExtractor:
     tactic_position_data: List[Dict[str, Any]]
     # intermediate data sets
     tactic_pos_data: List[Dict[str, Any]]
-    file_tactic_symbol_data: List[Dict[str, Any]]
+    tactic_data: Dict[str, Dict[str, Any]]
+    tactic_pos_trace_keys: Dict[Tuple[str, int, int, int], str]
     # hints for parsing the proofs
     parameter_positions: Dict[Tuple[int, int], List[Tuple[int, int]]]
     tactic_block_positions: Set[Tuple[int, int]]
-    evaluated_positions: Set[Tuple[int, int]]
+    # data structures for navigating the proof trees
+    tactics_to_process: List[str]
+    processed_tactics: Set[str]
     # end results
     proof_trees: List[Dict[str, Any]]
     proof_table: List[Dict[str, Any]]
@@ -52,8 +55,8 @@ class ProofExtractor:
         self.tactic_instance_data = tactic_instance_data
         self.tactic_params_pos_data = tactic_params_pos_data
 
-        self.tactic_pos_data: List[Dict[str, Any]] = []
-        self.file_tactic_symbol_data: List[Dict[str, Any]] = []
+        self.tactic_pos_data = []
+        self.tactic_data = {}
 
         self.proof_trees = []
         self.proof_table = []
@@ -84,8 +87,8 @@ class ProofExtractor:
 
         self.tactic_pos_data = list(tactic_pos_data.values())
 
-    def build_tactic_symbol_data(self) -> None:
-        tactic_symbol_data: Dict[str, Dict[str, Any]] = {}
+    def build_tactic_data(self) -> None:
+        self.tactic_data = {}
         for tac in sorted(self.tactic_pos_data, key=lambda tac: tac['depth']):
             # Tactics inside any `[...] block show up in the dataset
             # even if they are in another file.  We will remove
@@ -104,8 +107,15 @@ class ProofExtractor:
             if symbol == ";":
                 data['type'] = "semicolon"
                 # this info will be filled in when processing children later
-                data['line'] = float('inf')
-                data['column'] = float('inf')
+                # this line-column pair will ultimately be the position of the 
+                # left-most symbol in the tactic.
+                # It is initialized with the traced position, which is the
+                # position of the left-most semicolon in a chain of semicolons.
+                # Moreover, at every point in this recursive loop, the children
+                # on the left side will always have a lower or equal line-column
+                # pair.
+                data['line'] = tac['line']
+                data['column'] = tac['column']
                 data['semicolon_reverse_depth'] = None
                 data['preceeding_symbol'] = None
                 data['preceeding_line'] = None
@@ -126,37 +136,43 @@ class ProofExtractor:
                     data['line'] = tac['line']
                     data['column'] = tac['column']
 
-                # get previous token
+                # get previous token to know if it is the start of a proof
                 preceeding_token = self.lean_file.get_prev_matching_pattern(data['line']-1, data['column']-1, [TokenType.SYMBOL, TokenType.ALPHANUMERIC])
 
-                data['semicolon_reverse_depth'] = 0
                 data['preceeding_symbol'] = preceeding_token.string
                 data['preceeding_line'] = preceeding_token.line+1
                 data['preceeding_column'] = preceeding_token.column+1
 
+                # semicolon tactics are difficult to uniquely identify by their
+                # position since they are infix operators.  Moreover the tracing
+                # only records the position of the first semicolon in a list of
+                # semicolons.  We will recursively discover the reverse stack
+                # depth of the semicolon tactic as follows:
+                data['semicolon_reverse_depth'] = 0  # may be changed again later by its children
                 current_data = data
                 rev_depth = 0
-                while current_data['parent'] in tactic_symbol_data:
-                    current_data = tactic_symbol_data[current_data['parent']]
-                    if current_data['type'] != "semicolon":
+                while current_data['parent'] in self.tactic_data:
+                    parent = self.tactic_data[current_data['parent']]
+                    if parent['type'] != "semicolon":
+                        break
+                    # check that this branch stems from the left side of the parent
+                    if (data['line'], data['column']) > (parent['line'], parent['column']):
                         break
 
                     rev_depth += 1
 
-                    if (data['line'], data['column']) < (current_data['line'], current_data['column']):
-                        current_data['line'] = data['line']
-                        current_data['column'] = data['column']
-                        current_data['semicolon_reverse_depth'] = rev_depth
-                        current_data['preceeding_symbol'] = data['preceeding_symbol']
-                        current_data['preceeding_line'] = data['preceeding_line']
-                        current_data['preceeding_column'] = data['preceeding_column']
+                    current_data = parent
+                    current_data['line'] = data['line']
+                    current_data['column'] = data['column']
+                    current_data['semicolon_reverse_depth'] = rev_depth
+                    current_data['preceeding_symbol'] = data['preceeding_symbol']
+                    current_data['preceeding_line'] = data['preceeding_line']
+                    current_data['preceeding_column'] = data['preceeding_column']
 
-            tactic_symbol_data[data['key']] = data
-
-        self.tactic_symbol_data = list(tactic_symbol_data.values())
+            self.tactic_data[data['key']] = data
 
     def build_parser_hints(self) -> None:
-        self.tactic_symbol_data.sort(key=lambda tac: (tac['line'], tac['column']))
+        tactic_data_list = sorted(self.tactic_data.values(), key=lambda tac: (tac['line'], tac['column']))
         self.tactic_params_pos_data.sort(key=lambda param: (param['line'], param['column']))
 
         self.parameter_positions = collections.defaultdict(list)
@@ -164,23 +180,29 @@ class ProofExtractor:
             # empty parameters start and end at same position
             self.parameter_positions[param["line"]-1, param["column"]-1].append((param["end_line"]-1, param["end_column"]-1))
         self.tactic_block_positions = set()
-        for tac in self.tactic_symbol_data:
+        self.tactics_to_process = []
+        self.tactic_pos_trace_keys = {}
+        for tac in tactic_data_list:
             if tac['preceeding_symbol'] in ('by', 'begin', '{'):
                 self.tactic_block_positions.add((tac['preceeding_line']-1, tac['preceeding_column']-1))
-
-        self.evaluated_positions = set()
+            self.tactics_to_process.append(tac['key'])
+            self.tactic_pos_trace_keys[tac['filename'], tac['line'], tac['column'], tac['semicolon_reverse_depth']] = tac['key']
+        self.processed_tactics = set()
 
     def extract_ast(self, ast: AST.ASTData, proof_key: Optional[str] = None) -> Dict[str, Any]:
         # each ast node will be converted into the output ast as well as added to a table
         node = {}
+        node['key'] = None  #This will get filled in below
 
         row = {}
+        row['key'] = None  #This will get filled in below
         row['filename'] = self.relative_file_path
         row['start_line'] = ast.line + 1
         row['start_column'] = ast.column + 1
         row['end_line'] = ast.end_line + 1
         row['end_column'] = ast.end_column + 1
-        row['code'] = self.lean_file.slice_string(ast.line, ast.column, ast.end_line, ast.end_column, clean=True)
+        row['code_string'] = self.lean_file.slice_string(ast.line, ast.column, ast.end_line, ast.end_column, clean=True)
+        row['class'] = None  #This will get filled in below
 
         if proof_key is not None:
             row['proof_key'] = proof_key
@@ -191,6 +213,7 @@ class ProofExtractor:
         # to the position of the infix operator
         row['line'] = ast.line + 1
         row['column'] = ast.column + 1
+        infix_key = 0
         
         if isinstance(ast, AST.ByProof):
             node['node_type'] = "proof"
@@ -224,6 +247,7 @@ class ProofExtractor:
             
             row['line'] = ast.semicolon_line + 1
             row['column'] = ast.semicolon_column + 1
+            infix_key = ast.semicolon_count
         elif isinstance(ast, AST.SemicolonTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "semicolon"
@@ -232,6 +256,7 @@ class ProofExtractor:
             
             row['line'] = ast.semicolon_line + 1
             row['column'] = ast.semicolon_column + 1
+            infix_key = ast.semicolon_count
         elif isinstance(ast, AST.AlternativeTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "alternative"
@@ -240,6 +265,7 @@ class ProofExtractor:
             
             row['line'] = ast.alternative_line + 1
             row['column'] = ast.alternative_column + 1
+            infix_key = -1  # alternative tactics are not traced, so give a dummy key 
         elif isinstance(ast, AST.Solve1Tactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "solve1"
@@ -278,8 +304,19 @@ class ProofExtractor:
         if node['node_type'] == "proof":
             self.proof_table.append(row)
         elif node['node_type'] == "tactic":
+            row['proof_key'] = proof_key
+            if (row['filename'], row['start_line'], row['start_column'], infix_key) in self.tactic_pos_trace_keys:
+                trace_key = self.tactic_pos_trace_keys[row['filename'], row['start_line'], row['start_column'], infix_key]
+            
+                self.processed_tactics.add(trace_key)
+                row['trace_key'] = trace_key
+                # for now just copy ALL the data and sort it out later
+                if self.tactic_data[trace_key].items():
+                    for k, v in self.tactic_data[trace_key].items():
+                        row['tracing_' + k] = v
+            else:
+                row['trace_key'] = ""
             self.tactic_table.append(row)
-            self.evaluated_positions.add((ast.line, ast.column))
         elif node['node_type'] == "tactic_arg":
             self.arg_table.append(row)
         
@@ -287,14 +324,14 @@ class ProofExtractor:
 
     def run(self):
         self.build_tactic_pos_data()
-        self.build_tactic_symbol_data()
+        self.build_tactic_data()
         self.build_parser_hints()
 
-        for tac in self.tactic_symbol_data:
-            try:
-                if (tac["line"]-1, tac["column"]-1) in self.evaluated_positions:
+        for key in self.tactics_to_process:
+            if key in self.processed_tactics:
                     continue
-
+            tac = self.tactic_data[key]
+            try:
                 parser = LeanParser(
                     self.lean_file, 
                     tac['preceeding_line']-1, 
