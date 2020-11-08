@@ -73,7 +73,34 @@ This will add the following to the data directory:
 
     (Further cleaning may be neccessary to properly handle missing values.) Each row (within a table) is uniquely keyed by the "filename" and "key" columns.
 
+Run this command to parse the Lean code proofs.  This will use the traced data to guide a custom (and ad-hoc) Lean code parser to parse all tactic proofs into their respective tactics.  It will also parse the tactic arguments.
+
+```bash
+python3 tools/extract_proof_data.py <path/to/data/directory>
+```
+
+This script will add a directory `extacted_proof_data` to the data directory.  It contains the following `json` files:
+
+* `proof_trees.json` This includes JSON ASTs for a every proof.  (Note, this doesn't include term proofs, and for various reasons a Lean theorem can be have multiple associated proofs.  Roughly speaking, but with some exceptions, a tactic proof is one which is started by the `by` or `begin` keywords.)
+* `proof.json` A 2D table of data for each proof.  Use the `key` column to relate to the other data structures.
+* `tactic.json` A 2D table of data for each tactic command.  Use the `key` column to relate to the other data structures.
+* `args.json` A 2D table of data for each tactic command argument.  Use the `key` column to relate to the other data structures.
+
+## Putting it all together
+
+**This is still a work in progress.**  However, for ease of understanding the data,
+an [example notebook](data_examples.ipynb) is included.
+
 ## Customizations and Improvements
+
+### Set the version of Lean and Mathlib
+
+Edit the `leanpkg.toml` file to change the version of lean and mathlib.  This
+is really important to main exact compatability with other projects.  (Double
+check after running the `refresh.py` script above that the versions are the
+same as you set them.)
+
+### Add new tracing code
 
 The information traced by these tools may not be the information that another user needs.  
 
