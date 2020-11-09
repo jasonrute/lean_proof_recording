@@ -107,6 +107,21 @@ meta def set_state (new_state: tactic_state): tactic unit :=
   -- this is in mathlib but easier to recreate
   λ _, interaction_monad.result.success () new_state
 
+meta def goal_to_pp_string (goal_metavar : expr) (pp_all : bool): tactic string := do
+  -- pretty print the goal by temporarily making it the only goal 
+  saved_ts <- tactic.read, -- copy tactic state
+  tactic.set_goals [goal_metavar],
+  
+  -- change pretty printing settings
+  o <- tactic.get_options,
+  let o := o.set_bool `pp.all pp_all,
+  tactic.set_options o,
+  
+  ts <- tactic.read, -- temporary tactic state
+  let s := ts.to_format.to_string,
+  set_state saved_ts, -- put tactic state back to way it was
+  return s
+
 meta def trace_tactic_state_data (addr: tactic_address) (finished : bool) := do
 -- BEGIN CUSTOMIZABLE CODE
 -- customize as needed to record different
@@ -129,19 +144,17 @@ goals <- tactic.get_goals,
 trace_data_num "tactic_state" ts_key "goal_count" goals.length,
 
 -- individual goal information
-goals.enum.mmap' $ λ ⟨n, g⟩, (do
+goals.enum.mmap' $ λ ⟨n, g⟩, do {
   let g_key := ts_key ++ ":" ++ (repr n),
   trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
   trace_data_num "tactic_state_goal" g_key "ix" n,
   -- store hash of goal metavariable to know if goal changed
   trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
-  -- pretty print the goal by temporarily making it the only goal
-  saved_ts <- tactic.read, -- copy tactic state
-  tactic.set_goals [g],
-  ts <- tactic.read, -- temporary tactic state
-  trace_data_string "tactic_state_goal" g_key "goal_pp" ts.to_format.to_string,
-  set_state saved_ts -- put tactic state back to way it was
-),
+  pp_goal_state <- goal_to_pp_string g ff,
+  pp_all_goal_state <- goal_to_pp_string g tt,
+  trace_data_string "tactic_state_goal" g_key "goal_pp" pp_goal_state,
+  trace_data_string "tactic_state_goal" g_key "goal_pp_all" pp_all_goal_state
+},
 return ()
 -- END CUSTOMIZABLE CODE
 
