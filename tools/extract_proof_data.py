@@ -204,9 +204,6 @@ class ProofExtractor:
         row['code_string'] = self.lean_file.slice_string(ast.line, ast.column, ast.end_line, ast.end_column, clean=True)
         row['class'] = None  #This will get filled in below
 
-        if proof_key is not None:
-            row['proof_key'] = proof_key
-        
         # Uniquely identify the node by the position of its symbol.
         # Most nodes this is the position of the leading character,
         # but forsemicolon and alternate tactics this will be updated below
@@ -216,12 +213,14 @@ class ProofExtractor:
         infix_key = 0
         
         if isinstance(ast, AST.ByProof):
+            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "by"
             node['tactic'] = self.extract_ast(ast.tactic, proof_key)
             
             row['first_tactic_key'] = node['tactic']['key']
         elif isinstance(ast, AST.BeginProof):
+            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "begin"
             node['tactics'] = []
@@ -230,6 +229,7 @@ class ProofExtractor:
             
             row['first_tactic_key'] = node['tactics'][0]['key']
         elif isinstance(ast, AST.BracketProof):
+            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "bracket"
             node['tactics'] = []
