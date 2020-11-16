@@ -1,9 +1,11 @@
 import collections
 import json
+from os import pardir
 from pathlib import Path
 import sys
 import traceback
-from typing import Any, Dict, List, Set, Tuple, Optional
+from traceback import extract_stack
+from typing import Any, Dict, List, Set, Tuple, Optional, Union
 
 from parse_lean import AST, LeanParser
 from tokenize_lean_files import LeanFile, TokenType
@@ -189,7 +191,14 @@ class ProofExtractor:
             self.tactic_pos_trace_keys[tac['filename'], tac['line'], tac['column'], tac['semicolon_reverse_depth']] = tac['key']
         self.processed_tactics = set()
 
-    def extract_ast(self, ast: AST.ASTData, proof_key: Optional[str] = None) -> Dict[str, Any]:
+    def extract_ast(
+        self, 
+        ast: AST.ASTData,
+        proof_key: str, 
+        parent_key: str,
+        parent_type: str, # proof, tactic, or arg
+        index: int
+    ) -> Dict[str, Any]:
         # each ast node will be converted into the output ast as well as added to a table
         node = {}
         node['key'] = None  #This will get filled in below
@@ -203,6 +212,9 @@ class ProofExtractor:
         row['end_column'] = ast.end_column + 1
         row['code_string'] = self.lean_file.slice_string(ast.line, ast.column, ast.end_line, ast.end_column, clean=True)
         row['class'] = None  #This will get filled in below
+        row['parent_key'] = parent_key
+        row['parent_type'] = parent_type
+        row['index'] = index
 
         # Uniquely identify the node by the position of its symbol.
         # Most nodes this is the position of the leading character,
@@ -210,80 +222,156 @@ class ProofExtractor:
         # to the position of the infix operator
         row['line'] = ast.line + 1
         row['column'] = ast.column + 1
+        key = f"{row['filename']}:{row['line']}:{row['column']}"
         infix_key = 0
         
         if isinstance(ast, AST.ByProof):
-            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "by"
-            node['tactic'] = self.extract_ast(ast.tactic, proof_key)
+            node['tactic'] = self.extract_ast(
+                ast.tactic, 
+                proof_key=proof_key, 
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=0
+            )
             
             row['first_tactic_key'] = node['tactic']['key']
         elif isinstance(ast, AST.BeginProof):
-            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "begin"
             node['tactics'] = []
-            for tactic in ast.tactics:
-                node['tactics'].append(self.extract_ast(tactic, proof_key))
+            for i, tactic in enumerate(ast.tactics):
+                node['tactics'].append(self.extract_ast(
+                    tactic, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i
+                ))
             
             row['first_tactic_key'] = node['tactics'][0]['key']
         elif isinstance(ast, AST.BracketProof):
-            proof_key = f"{row['filename']}:{row['line']}:{row['column']}"
             node['node_type'] = "proof"
             node['node_subtype'] = "bracket"
             node['tactics'] = []
-            for tactic in ast.tactics:
-                node['tactics'].append(self.extract_ast(tactic, proof_key))
+            for i, tactic in enumerate(ast.tactics):
+                node['tactics'].append(self.extract_ast(
+                    tactic, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i
+                ))
             
             row['first_tactic_key'] = node['tactics'][0]['key']
         elif isinstance(ast, AST.SemicolonListTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "semicolon_list"
-            node['tactic1'] = self.extract_ast(ast.tactic1, proof_key)
-            node['tactics2'] = []
-            for tactic in ast.tactic_list:
-                node['tactics2'].append(self.extract_ast(tactic,  proof_key))
-            
+
             row['line'] = ast.semicolon_line + 1
             row['column'] = ast.semicolon_column + 1
+            key = f"{row['filename']}:{row['line']}:{row['column']}"
             infix_key = ast.semicolon_count
+
+            node['tactic1'] = self.extract_ast(
+                ast.tactic1, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=0
+            )
+            node['tactics2'] = []
+            for i, tactic in enumerate(ast.tactic_list):
+                node['tactics2'].append(self.extract_ast(
+                    tactic, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i+1
+                ))
         elif isinstance(ast, AST.SemicolonTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "semicolon"
-            node['tactic1'] = self.extract_ast(ast.tactic1, proof_key)
-            node['tactic2'] = self.extract_ast(ast.tactic2, proof_key)
-            
+
             row['line'] = ast.semicolon_line + 1
             row['column'] = ast.semicolon_column + 1
+            key = f"{row['filename']}:{row['line']}:{row['column']}"
             infix_key = ast.semicolon_count
+
+            node['tactic1'] = self.extract_ast(
+                ast.tactic1, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=0
+            )
+            node['tactic2'] = self.extract_ast(
+                ast.tactic2, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=1
+            )
         elif isinstance(ast, AST.AlternativeTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "alternative"
-            node['tactic1'] = self.extract_ast(ast.tactic1, proof_key)
-            node['tactic2'] = self.extract_ast(ast.tactic2, proof_key)
-            
+
             row['line'] = ast.alternative_line + 1
             row['column'] = ast.alternative_column + 1
+            key = f"{row['filename']}:{row['line']}:{row['column']}"
             infix_key = -1  # alternative tactics are not traced, so give a dummy key 
+
+            node['tactic1'] = self.extract_ast(
+                ast.tactic1, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=0
+            )
+            node['tactic2'] = self.extract_ast(
+                ast.tactic2, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=1
+            )
         elif isinstance(ast, AST.Solve1Tactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "solve1"
             node['tactics'] = []
-            for tactic in ast.tactics:
-                node['tactics'].append(self.extract_ast(tactic, proof_key))
+            for i, tactic in enumerate(ast.tactics):
+                node['tactics'].append(self.extract_ast(
+                    tactic, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i
+                ))
         elif isinstance(ast, AST.NamedTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "named"
             node['args'] = []
-            for arg in ast.args:
-                node['args'].append(self.extract_ast(arg, proof_key))
+            for i, arg in enumerate(ast.args):
+                node['args'].append(self.extract_ast(
+                    arg, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i
+                ))
         elif isinstance(ast, AST.ITactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "itactic"
             node['tactics'] = []
-            for tactic in ast.tactics:
-                node['tactics'].append(self.extract_ast(tactic, proof_key))
+            for i, tactic in enumerate(ast.tactics):
+                node['tactics'].append(self.extract_ast(
+                    tactic, 
+                    proof_key=proof_key,
+                    parent_key=key,
+                    parent_type=node['node_type'],
+                    index=i
+                ))
         elif isinstance(ast, AST.CalcTactic):
             node['node_type'] = "tactic"
             node['node_subtype'] = "calc"
@@ -292,7 +380,13 @@ class ProofExtractor:
         elif isinstance(ast, AST.ITacticTacticParam):
             node['node_type'] = "tactic_arg"
             node['node_subtype'] = "itactic"
-            node['tactic'] = self.extract_ast(ast.tactic, proof_key)
+            node['tactic'] = self.extract_ast(
+                ast.tactic, 
+                proof_key=proof_key,
+                parent_key=key,
+                parent_type=node['node_type'],
+                index=0
+            )
         elif isinstance(ast, AST.TacticParam): # TODO: Change parser here to return a subtype
             node['node_type'] = "tactic_arg"
             node['node_subtype'] = "expression"
@@ -310,10 +404,6 @@ class ProofExtractor:
             
                 self.processed_tactics.add(trace_key)
                 row['trace_key'] = trace_key
-                # for now just copy ALL the data and sort it out later
-                if self.tactic_data[trace_key].items():
-                    for k, v in self.tactic_data[trace_key].items():
-                        row['tracing_' + k] = v
             else:
                 row['trace_key'] = ""
             self.tactic_table.append(row)
@@ -321,6 +411,17 @@ class ProofExtractor:
             self.arg_table.append(row)
         
         return node
+
+    def extract_proof_ast(
+        self, 
+        ast: Union[AST.ByProof, AST.BeginProof, AST.BracketProof]
+    ) -> Dict[str, Any]:
+        return self.extract_ast(
+            ast, 
+            proof_key=f"{self.relative_file_path}:{ast.line + 1}:{ast.column + 1}", 
+            parent_key="",
+            parent_type="",
+            index=0)
 
     def run(self):
         self.build_tactic_pos_data()
@@ -354,7 +455,7 @@ class ProofExtractor:
                 # besides returning a proof tree
                 # this method also add each node to the output tables and
                 # to the evaluated_positions set
-                proof_tree = self.extract_ast(parser_ast)
+                proof_tree = self.extract_proof_ast(parser_ast)
                 self.proof_trees.append(proof_tree)
 
             except Exception as e:
