@@ -15,6 +15,7 @@ LEAN_DIRS = [
 
 TACTIC_LEAN_FILE = Path("_target/deps/lean/library/init/meta/tactic.lean")
 TACTIC_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/tactic_modifications.lean")
+TACTIC_LEAN_FILE_MODIFICATIONS_SEXP = Path("lean_modifications/tactic_modifications_sexp.lean")
 
 INTERACTIVE_BASE_LEAN_FILE = Path("_target/deps/lean/library/init/meta/interactive_base.lean")
 INTERACTIVE_BASE_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/interactive_base_modifications.lean")
@@ -61,9 +62,9 @@ def get_modification(modification_lean: Path) -> str:
                 record = True
     raise Exception("No modification found.")
 
-def insert_tactic_tracing_code(dryrun: bool):
+def insert_tactic_tracing_code(dryrun: bool, sexp:bool):
     l1, l2 = find_code_location(TACTIC_LEAN_FILE, ISTEP_CODE)
-    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS)
+    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS) if not sexp else get_modification(TACTIC_LEAN_FILE_MODIFICATIONS_SEXP)
 
     modifier = LeanModifier(TACTIC_LEAN_FILE)
     modifier.delete_lines(l1, l2)
@@ -77,7 +78,7 @@ def insert_param_tracing_code(dryrun: bool):
     modifier.add_lines_at_end(tactic_recording_code)
     modifier.build_file(dryrun=dryrun)
 
-    # (tactic) interactive 
+    # (tactic) interactive
     _, l2 = find_code_location(TACTIC_INTERACTIVE_LEAN_FILE, TACTIC_ITACTIC_CODE)
     tactic_recording_code = get_modification(TACTIC_INTERACTIVE_LEAN_FILE_MODIFICATIONS)
     modifier = LeanModifier(TACTIC_INTERACTIVE_LEAN_FILE)
@@ -143,19 +144,19 @@ class ModifyInterativeParameters:
 
             return InteractiveParameter(
                 pos=Position(
-                    parts[0].line, 
+                    parts[0].line,
                     parts[0].column,
-                    parts[-1].end_line, 
-                    parts[-1].end_column 
+                    parts[-1].end_line,
+                    parts[-1].end_column
                 ),
                 command='parse',
                 param_ix=param_ix,
                 parser_pos=Position(
-                    parts[i].line, 
-                    parts[i].column, 
-                    parts[-1].end_line, 
+                    parts[i].line,
+                    parts[i].column,
+                    parts[-1].end_line,
                     parts[-1].end_column
-                ),                
+                ),
             )
         raise Exception("Could not extract parser.")
 
@@ -167,16 +168,16 @@ class ModifyInterativeParameters:
             if self.expr_begins_with(param_expr, itactic_command):
                 return InteractiveParameter(
                     pos=Position(
-                        param_expr.expr_parts[0].line, 
-                        param_expr.expr_parts[0].column, 
-                        param_expr.expr_parts[len(itactic_command)-1].end_line, 
+                        param_expr.expr_parts[0].line,
+                        param_expr.expr_parts[0].column,
+                        param_expr.expr_parts[len(itactic_command)-1].end_line,
                         param_expr.expr_parts[len(itactic_command)-1].end_column
                     ),
                     command="".join(itactic_command),
                     param_ix=param_ix
                 )
         return None
-        
+
 
     def interactive_parameters(self, ast: AST.DefLike) -> List[InteractiveParameter]:
         interactive_params = []
@@ -193,16 +194,16 @@ class ModifyInterativeParameters:
                 if result is not None:
                     interactive_params.append(result)
         return interactive_params
-    
+
     def modify_def(self, lean_file: LeanFile, line: int, end_line: int, tactic_name: str, monad_type: str, iparams: List[InteractiveParameter]) -> Modification:
         # reconstruct new declaration
         s = ""
         pos = (line, 0)
         for param in iparams:
             s += lean_file.slice_string(
-                pos[0], 
+                pos[0],
                 pos[1],
-                param.pos.line, 
+                param.pos.line,
                 param.pos.column
             )
             if param.command.endswith('itactic'):
@@ -218,12 +219,12 @@ class ModifyInterativeParameters:
                     parser = "conv.interactive.pr.recorded_itactic"
                 else:
                     raise Exception(f'Unexpected monad type: {monad_type}')
-                
+
                 # FIXME: Conv not working right, so skip it
                 if parser.startswith("tactic"):
                     s += "interactive.parse ("
                     s += parser
-                    #s += " " + json.dumps(tactic_name)  # easiest way to escape strings 
+                    #s += " " + json.dumps(tactic_name)  # easiest way to escape strings
                     #s += " " + str(param.param_ix)
                     s += ") "
                 else:
@@ -233,9 +234,9 @@ class ModifyInterativeParameters:
                 #s += " " + json.dumps(tactic_name)  # easiest way to escape strings
                 #s += " " + str(param.param_ix)
                 parser = lean_file.slice_string(
-                    param.parser_pos.line, 
+                    param.parser_pos.line,
                     param.parser_pos.column,
-                    param.parser_pos.end_line, 
+                    param.parser_pos.end_line,
                     param.parser_pos.end_column
                 )
                 parser = parser.strip()
@@ -247,14 +248,14 @@ class ModifyInterativeParameters:
                 assert False
             pos = (param.pos.end_line, param.pos.end_column)
         s += lean_file.slice_string(
-                pos[0], 
+                pos[0],
                 pos[1],
                 end_line,
                 0
         )  # Go to end of the line (including newline)
-        
+
         return Modification(
-            line=line, 
+            line=line,
             end_line=end_line,
             new_lines=s
         )
@@ -263,9 +264,9 @@ class ModifyInterativeParameters:
         if ast.signature.signature_type is not None:
             result_type = ast.signature.signature_type.result_type
             type_string = lean_file.slice_string(
-                result_type.line, 
-                result_type.column, 
-                result_type.end_line, 
+                result_type.line,
+                result_type.column,
+                result_type.end_line,
                 result_type.end_column
             ).strip()
             monad_type = type_string.split()[0]
@@ -280,11 +281,11 @@ class ModifyInterativeParameters:
             monad_type = 'tactic'
 
         if monad_type in ["lean.parser", "parser", "smt_tactic", "old_conv"]:
-            # user commands, macros, smt tactics, and old converstions 
+            # user commands, macros, smt tactics, and old converstions
             # don't have proof tracing currently
             return None
 
-        if monad_type == "itactic":   
+        if monad_type == "itactic":
             print()
             print("Warning: This definition has type itactic, which is ambiguous.")
             print("Since it has interactive parameters, we will assume")
@@ -299,7 +300,7 @@ class ModifyInterativeParameters:
             print(lean_file.slice_string(ast.line, 0, ast.end_line, ast.end_column))
             print()
             return None
-        
+
         return monad_type
 
     def find_def_mod(self, lean_file: LeanFile, line: int, column: int) -> Optional[Modification]:
@@ -332,7 +333,7 @@ class ModifyInterativeParameters:
             return None
 
         end_line = ast.end_line + 1  # +1 since using the first line after that tactic
-        
+
         tactic_name_path = ast.name.name_path
         if tactic_name_path[:2] == ["tactic", "."]:
             tactic_name_path = tactic_name_path[2:]
@@ -341,7 +342,7 @@ class ModifyInterativeParameters:
         if tactic_name_path[:2] == ["interactive", "."]:
             tactic_name_path = tactic_name_path[2:]
         tactic_name = ".".join(tactic_name_path)
-        
+
         return self.modify_def(lean_file, line, end_line, tactic_name, monad_type, iparams)
 
 
@@ -358,7 +359,7 @@ class ModifyInterativeParameters:
             for mod in modifications:
                 modifier.replace_lines(mod.line, mod.end_line, mod.new_lines)
             modifier.build_file(dryrun=dryrun)
-            
+
             # print(file)
             # for mod in modifications:
             #     print("=======")
@@ -372,21 +373,25 @@ def modify_interactive_tactic_parameters(dryrun: bool):
         for f in lean_dir.glob("**/*.lean"):
             ModifyInterativeParameters().find_and_modify(f, dryrun=dryrun)
 
+def _parse_main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dryrun", action="store_true")
+    parser.add_argument("--sexp", action="store_true")
+    return parser.parse_args()
+
 def main():
-    assert len(sys.argv) in (1, 2)
-    if len(sys.argv) == 2:
-        assert sys.argv[-1] == "--dryrun"
-        dryrun = True
-        print("Dry run.  No files will be modified.")
-    else:
-        dryrun = False
-    
+    opts = _parse_main()
+    dryrun = opts.dryrun
+    if dryrun: print("[insert_proof_recording_code] Dry run. No files will be modified.")
+    sexp = opts.sexp
+
     print("Insert tactic tracing code")
-    insert_tactic_tracing_code(dryrun=dryrun)
-    
+    insert_tactic_tracing_code(dryrun=dryrun, sexp=sexp)
+
     print("Insert tactic parameter tracing code")
     insert_param_tracing_code(dryrun=dryrun)
-    
+
     print("Modify tactic parameters")
     modify_interactive_tactic_parameters(dryrun=dryrun)
 
