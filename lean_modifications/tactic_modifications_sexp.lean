@@ -251,7 +251,7 @@ meta def tactic_state.to_sexp (ts : tactic_state) : tactic (sexp string) := do
   hyps ← tactic.local_context,
   annotated_hyps ← hyps.mmap (λ h, prod.mk h <$> tactic.infer_type h),
   hyps_sexp ← do {
-    hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr none hc <*> sexp_of_expr none hc,
+    hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr none hc <*> sexp_of_expr none ht,
     pure $ sexp.list $ [sexp.atom "HYPS"] ++ hyps_sexps
   },
   goal_sexp ← tactic.target >>= sexp_of_expr none,
