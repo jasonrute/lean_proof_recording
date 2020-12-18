@@ -117,7 +117,7 @@ meta def sexp_of_expr : (option ℕ) → expr → tactic (sexp string) := λ fue
   | (some x) := when (x = 0) $ tactic.fail "sexp_of_expr fuel exhausted"
   end,
   match ex with
-  | e@(var k) := (sexp.list [sexp.atom "var"]) <+> (sexp.list [sexp.atom (to_string k)])
+  | e@(var k) := (sexp.list [sexp.atom "var"]) <+> (sexp.list [sexp.atom (repr k)])
   | e@(sort l) := (sexp.list [sexp.atom "sort"]) <+> (sexp.list [sexp.atom (to_string l)])
   | e@(const nm ls) := pure $ sexp.atom nm.to_string
   | e@(mvar un pt tp) := do tp_sexp ← sexp_of_expr ((flip nat.sub 1) <$> fuel) tp, pure $ mk_type_ascription (sexp.atom pt.to_string) tp_sexp
