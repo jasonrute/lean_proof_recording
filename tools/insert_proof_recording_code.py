@@ -1,4 +1,4 @@
-import dataclasses
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import sys
@@ -92,20 +92,20 @@ def insert_param_tracing_code(dryrun: bool):
     # modifier.add_lines(l2, tactic_recording_code)
     # modifier.build_file(dryrun=dryrun)
 
-@dataclasses.dataclass
+@dataclass
 class Position:
     line: int
     column: int
     end_line: int
     end_column: int
 
-@dataclasses.dataclass
+@dataclass
 class Modification:
     line: int
     end_line: int
     new_lines: str
 
-@dataclasses.dataclass
+@dataclass
 class InteractiveParameter:
     pos: Position
     command: str
