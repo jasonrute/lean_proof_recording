@@ -14,8 +14,12 @@ LEAN_DIRS = [
 ]
 
 TACTIC_LEAN_FILE = Path("_target/deps/lean/library/init/meta/tactic.lean")
+
+def get_tactic_lean_file_modifications_prefix(sexp: bool):
+    x = "sexp" if sexp else "flat"
+    return Path(f"lean_modifications/print_tactic_state_{x}.lean")
+
 TACTIC_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/tactic_modifications.lean")
-TACTIC_LEAN_FILE_MODIFICATIONS_SEXP = Path("lean_modifications/tactic_modifications_sexp.lean")
 
 INTERACTIVE_BASE_LEAN_FILE = Path("_target/deps/lean/library/init/meta/interactive_base.lean")
 INTERACTIVE_BASE_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/interactive_base_modifications.lean")
@@ -64,10 +68,16 @@ def get_modification(modification_lean: Path) -> str:
 
 def insert_tactic_tracing_code(dryrun: bool, sexp:bool):
     l1, l2 = find_code_location(TACTIC_LEAN_FILE, ISTEP_CODE)
-    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS) if not sexp else get_modification(TACTIC_LEAN_FILE_MODIFICATIONS_SEXP)
+    tactic_recording_code_prefix = get_modification(get_tactic_lean_file_modifications_prefix(sexp))
+    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS)
+
+    prefix_modifier = LeanModifier(TACTIC_LEAN_FILE)
+    prefix_modifier.delete_lines(l1, l2)
+    prefix_modifier.add_lines_at_end(tactic_recording_code_prefix)
+    prefix_modifier.build_file(dryrun=dryrun)
 
     modifier = LeanModifier(TACTIC_LEAN_FILE)
-    modifier.delete_lines(l1, l2)
+    # modifier.delete_lines(l1, l2)
     modifier.add_lines_at_end(tactic_recording_code)
     modifier.build_file(dryrun=dryrun)
 
