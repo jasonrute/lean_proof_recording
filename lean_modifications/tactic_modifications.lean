@@ -50,7 +50,7 @@ meta def trace_data_bool (table : string) (key : string) (field : string) (bool_
 /-- Each tactic application within a given file can be keyed by four
 numbers.  Combinators allow a tactic to be called more than once, and
 some nested tactics use the same line and column position, so
-we also include depth to capture nesting and index to capture exectuted
+we also include depth to capture nesting and index to capture executed
 order.  (A proof can be uniquely keyed by its first tactic 
 at depth 1, index 1.) -/
 structure tactic_address :=

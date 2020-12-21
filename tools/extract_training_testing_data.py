@@ -8,9 +8,10 @@ EXTRACTED_PROOF_DATA_DIR = "extracted_proof_data"
 CLEANED_TRAINING_DATA_DIR = "cleaned_training_data"
 
 def gather_data_for_model(
-    tactic_state_goal: pd.DataFrame,
-    tactic_state: pd.DataFrame,
-    tactics: pd.DataFrame
+        tactic_state_goal: pd.DataFrame,
+        tactic_state: pd.DataFrame,
+        tactics: pd.DataFrame,
+        no_solve1: bool,
 ):
     # take first goal in each tactic state
     df = tactic_state_goal.copy()
@@ -42,10 +43,11 @@ def gather_data_for_model(
     df3 = df3.set_index('tactic_key')
     df = df.join(df3, how='inner')
     df = df.reset_index()
-    df = df.drop(['tactic_key', 'tactic_instance_key'], axis='columns') 
+    df = df.drop(['tactic_key', 'tactic_instance_key'], axis='columns')
 
     # remove solve1 tactics
-    df = df[df['tactic_class'] != 'solve1']
+    if no_solve1:
+        df = df[df['tactic_class'] != 'solve1']
     
     # clean input
     df['cleaned_goal'] = (
@@ -68,9 +70,16 @@ def gather_data_for_model(
 
     return df
 
+def _parse_main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("data_dir")
+    parser.add_argument("--no-solve1", action="store_true", dest="no_solve1")
+    return parser.parse_args()
+
 def main():
-    assert len(sys.argv) == 2
-    data_dir = Path(sys.argv[1])
+    opts = _parse_main()
+    data_dir = Path(opts.data_dir)
     assert data_dir.exists(), data_dir
     assert data_dir.is_dir(), data_dir
 
@@ -80,27 +89,44 @@ def main():
     tactics = pd.read_json(data_dir / EXTRACTED_PROOF_DATA_DIR / 'tactics.json', orient='records')
 
     # process
-    full_data = gather_data_for_model(tactic_state_goal, tactic_state, tactics)
+    full_data = gather_data_for_model(tactic_state_goal, tactic_state, tactics, no_solve1=opts.no_solve1)
 
     # save to files
     cleaned_data_dir = data_dir / CLEANED_TRAINING_DATA_DIR 
     cleaned_data_dir.mkdir(exist_ok=True)
 
     full_data.to_csv(cleaned_data_dir / "data_and_metadata.csv")
+    
     for split in ['train', 'valid', 'test']:
+        src_file = cleaned_data_dir / f"{split}.src"
+        tgt_file = cleaned_data_dir / f"{split}.tgt"
         data_split = full_data[full_data['split'] == split]
-        for src_tgt in ['src', 'tgt', 'names']:
-            path = cleaned_data_dir / f"{split}.{src_tgt}"
-            if src_tgt == "src":
-                data = data_split['cleaned_goal']
-            elif src_tgt == "tgt":
-                data = data_split['human_tactic_code']
-            elif src_tgt == "names":
-                data = data_split['decl_name'] + " " + data_split['open_namespaces']
-            else:
-                raise Exception("Unreachable code reached")
-            path.touch()
-            path.write_text("\n".join(data))
+        skip_count = 0
+        example_set = set()
+        with open(str(src_file), "w") as src_handle:
+            with open(str(tgt_file), "w") as tgt_handle:
+                for idx, row in data_split.iterrows():
+                    # discard solve1s applied to only 1 goal to avoid duplication
+                    if row["tactic_class"] == "solve1"\
+                       and row["cleaned_goal"].count("⊢") == 1:
+                        skip_count += 1; continue
+                    example_src = row["cleaned_goal"]
+                    example_tgt = row["human_tactic_code"]
+                    if (example_src, example_tgt) in example_set: continue
+                    else:  example_set.add((example_src, example_tgt))
+                    src_handle.write(example_src + "\n")
+                    tgt_handle.write(example_tgt + "\n")
+
+                print(f"SKIPPED {skip_count} FOR SPLIT {split}")
+            
+        # for src_tgt in ['src', 'tgt']:
+        #     path = cleaned_data_dir / f"{split}.{src_tgt}"
+        #     if src_tgt == "src":
+        #         data = data_split['cleaned_goal']
+        #     else:
+        #         data = data_split['human_tactic_code']
+        #     path.touch()
+        #     path.write_text("\n".join(data))
 
 if __name__ == "__main__":
     main()

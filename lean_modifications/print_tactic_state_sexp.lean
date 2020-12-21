@@ -22,6 +22,8 @@ universes u v
 
 --PR BEGIN MODIFICATION
 -- sexp modification
+local notation `SEXP_DEPTH_LIMIT` := some (50 : ℕ)
+
 section sexp
 inductive sexp (α : Type u) : Type u
 | atom : α → sexp
@@ -162,18 +164,19 @@ end open_binders
 section 
 open sexp tactic
 meta def tactic_state.to_sexp (ts : tactic_state) : tactic (sexp string) := do
-  tactic.write ts,
-  do { gs ← tactic.get_goals, guard (gs.length = 1) },
+  λ _, interaction_monad.result.success () ts,
+  -- do { gs ← tactic.get_goals, guard (gs.length = 1) <|>
+  --      tactic.trace ("[tactic_state.to_sexp] WARNING: NUM GOALS" ++ gs.length.repr) },
   hyps ← tactic.local_context,
   annotated_hyps ← hyps.mmap (λ h, prod.mk h <$> tactic.infer_type h),
   hyps_sexp ← do {
-    hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr none hc <*> sexp_of_expr none ht,
+    hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr SEXP_DEPTH_LIMIT hc <*> sexp_of_expr none ht,
     pure $ sexp.list $ [sexp.atom "HYPS"] ++ hyps_sexps
   },
-  goal_sexp ← tactic.target >>= sexp_of_expr none,
-  pure $ sexp.list [sexp.atom "TACTIC_STATE", hyps_sexp, goal_sexp]
+  goal_sexp ← (λ x, sexp.list [sexp.atom "GOAL", x]) <$> (tactic.target >>= sexp_of_expr SEXP_DEPTH_LIMIT),
+  pure $ sexp.list [sexp.atom "GOAL_STATE", hyps_sexp, goal_sexp]
 end 
 
-local notation `PRINT_TACTIC_STATE` := tactic_state.to_sexp
+local notation `PRINT_TACTIC_STATE` := λ ts, (format.to_string ∘ format.flatten ∘ sexp.to_format) <$> tactic_state.to_sexp ts
 -- end sexp modifications
 --PR END MODIFICATION

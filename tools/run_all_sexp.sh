@@ -11,7 +11,7 @@ fi
 echo "Running full pipeline targeting $DATA_DIR"
 
 python3 tools/refresh.py
-python3 tools/insert_proof_recording_code.py
+python3 tools/insert_proof_recording_code.py --sexp
 lean --make src/empty.lean
 bash _target/deps/mathlib/scripts/mk_all.sh
 mkdir "$DATA_DIR"
