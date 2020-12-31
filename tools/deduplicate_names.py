@@ -14,7 +14,7 @@ def _main(path: str, dest: str):
         for line_count, l in enumerate(f):
             names = l.split()
             decl_nm = names[0]
-            namespaces = list(set(names[1:]))
+            namespaces = names[1:]
             if decl_nm in name_dict:
                 continue
             else:
