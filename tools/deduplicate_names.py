@@ -6,14 +6,15 @@ def _parse_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("path", help="names file to be deduplicated")
     parser.add_argument("dest", help="destination for deduplicated names")
+    return parser.parse_args()
 
 def _main(path: str, dest: str):
     name_dict = dict()
     with open(path, "r") as f:
-        for l, line_count in enumerate(f):
+        for line_count, l in enumerate(f):
             names = l.split()
             decl_nm = names[0]
-            namespaces = names[1:]
+            namespaces = list(set(names[1:]))
             if decl_nm in name_dict:
                 continue
             else:
