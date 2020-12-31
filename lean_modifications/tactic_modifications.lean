@@ -136,22 +136,23 @@ trace_data_string "tactic_state" ts_key "open_namespaces" (string.intercalate " 
 goals <- tactic.get_goals,
 trace_data_num "tactic_state" ts_key "goal_count" goals.length,
 
-let dump_all_goals : tactic unit := do {
--- dump entire goal stack as a single goal
-(tactic_state_strings : list string) ← goals.mmap $ λ g, do {
-  saved_ts ← tactic.read,
-  tactic.set_goals [g],
-  ts ← tactic.read,
-  result ← PRINT_TACTIC_STATE ts,
-  set_state saved_ts,
-  pure result
-},
+  let dump_all_goals : tactic unit := do {
+  -- dump entire goal stack as a single goal
+  (tactic_state_strings : list string) ← goals.mmap $ λ g, do {
+    saved_ts ← tactic.read,
+    tactic.set_goals [g],
+    ts ← tactic.read,
+    result ← PRINT_TACTIC_STATE ts,
+    set_state saved_ts,
+    pure result
+  },
 
-let g_key := ts_key ++ ":0",
-trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
-trace_data_num "tactic_state_goal" g_key "ix" 0,
-trace_data_num "tactic_state_goal" g_key "goal_hash" ((goals.map expr.hash).foldr (+) 0),
-trace_data_string "tactic_state_goal" g_key "goal_pp" ("\n\n".intercalate tactic_state_strings)},
+  let g_key := ts_key ++ ":0",
+  trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
+  trace_data_num "tactic_state_goal" g_key "ix" 0,
+  trace_data_num "tactic_state_goal" g_key "goal_hash" ((goals.map expr.hash).foldr (+) 0),
+  trace_data_string "tactic_state_goal" g_key "goal_pp" ("\n\n".intercalate tactic_state_strings)
+},
 
 dump_all_goals,
 
