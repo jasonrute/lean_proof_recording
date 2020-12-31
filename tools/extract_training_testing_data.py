@@ -25,7 +25,10 @@ def gather_data_for_model(
     df2['tactic_state_key'] = df2['filename'] + ":" + df2['key']
     df2['tactic_instance_key'] = df2['filename'] + ":" + df2['tactic_instance']
     df2['tactic_key'] = df2['tactic_instance_key'].apply(lambda k: ":".join(k.split(":")[:-1]))
-    df2 = df2[['tactic_state_key', 'tactic_instance_key', 'tactic_key']]
+    df2 = df2[['tactic_state_key', 'tactic_instance_key', 'tactic_key', 'decl_name', 'open_namespaces']]
+    df2['decl_name'] = df2['decl_name'].str.replace("`", "")
+    df2['open_namespaces'] = df2['open_namespaces'].str.replace("`", "")
+    df2['open_namespaces'] = df2['open_namespaces'].str.replace(r"\[anonymous\] ?", "")
     df2 = df2.set_index('tactic_state_key')
 
     df = df.join(df2, how='inner')
@@ -86,12 +89,16 @@ def main():
     full_data.to_csv(cleaned_data_dir / "data_and_metadata.csv")
     for split in ['train', 'valid', 'test']:
         data_split = full_data[full_data['split'] == split]
-        for src_tgt in ['src', 'tgt']:
+        for src_tgt in ['src', 'tgt', 'names']:
             path = cleaned_data_dir / f"{split}.{src_tgt}"
             if src_tgt == "src":
                 data = data_split['cleaned_goal']
-            else:
+            elif src_tgt == "tgt":
                 data = data_split['human_tactic_code']
+            elif src_tgt == "names":
+                data = data_split['decl_name'] + " " + data_split['open_namespaces']
+            else:
+                raise Exception("Unreachable code reached")
             path.touch()
             path.write_text("\n".join(data))
 
