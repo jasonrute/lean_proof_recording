@@ -51,11 +51,11 @@ def gather_data_for_model(
     df['cleaned_goal'] = (
         df['goal_pp']
         # remove tags
-        .str.replace(r"^[^:⊢]*\n", "")
+        .str.replace(r"^[^:⊢]*\n", "", regex=True)
         # remove pp indenting (including extra line wraps)
-        .str.replace(r"\n +", " ") 
+        .str.replace(r"\n +", " ", regex=True) 
         # replace new lines with tabs
-        .str.replace(r"\n", "\t")
+        .str.replace(r"\n", "\t", regex=True)
     )
 
     # train-test-validate split based on proof_key
