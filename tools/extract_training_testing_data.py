@@ -28,7 +28,7 @@ def gather_data_for_model(
     df2 = df2[['tactic_state_key', 'tactic_instance_key', 'tactic_key', 'decl_name', 'open_namespaces']]
     df2['decl_name'] = df2['decl_name'].str.replace("`", "")
     df2['open_namespaces'] = df2['open_namespaces'].str.replace("`", "")
-    df2['open_namespaces'] = df2['open_namespaces'].str.replace(r"\[anonymous\] ?", "")
+    df2['open_namespaces'] = df2['open_namespaces'].str.replace(r"\[anonymous\] ?", "", regex=True)
     df2 = df2.set_index('tactic_state_key')
 
     df = df.join(df2, how='inner')
