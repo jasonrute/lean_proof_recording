@@ -124,6 +124,10 @@ env <- tactic.get_env,
 -- store fingerprint as a string to prevent large values errors
 trace_data_string "tactic_state" ts_key "env_fingerprint" (repr env.fingerprint),
 
+-- declaration
+decl <- tactic.decl_name,
+trace_data_string "tactic_state" ts_key "decl_name" (repr decl),
+
 -- goal stack information
 goals <- tactic.get_goals,
 trace_data_num "tactic_state" ts_key "goal_count" goals.length,
