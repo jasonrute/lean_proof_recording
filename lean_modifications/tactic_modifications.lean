@@ -126,7 +126,11 @@ trace_data_string "tactic_state" ts_key "env_fingerprint" (repr env.fingerprint)
 
 -- declaration
 decl <- tactic.decl_name,
-trace_data_string "tactic_state" ts_key "decl_name" (repr decl),
+trace_data_string "tactic_state" ts_key "decl_name" (to_string decl),
+
+-- open namespaces
+open_nmspaces <- tactic.open_namespaces,
+trace_data_string "tactic_state" ts_key "open_namespaces" (string.intercalate " " (open_nmspaces.map repr)),
 
 -- goal stack information
 goals <- tactic.get_goals,
