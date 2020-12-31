@@ -63,40 +63,6 @@ meta def set_state (new_state: tactic_state): tactic unit :=
 
 
 
------------------------
--- json2
------------------------
-
--- This is a copy of the json2 structure, but removing anything that is
--- not available already in interactive.lean
-meta inductive json2 : Type
-| of_string : string → json2
-| of_nat : nat → json2
-| of_bool : bool → json2
-| null : json2
-| object : list (string × json2) → json2
-| array : list json2 → json2
-
-namespace json2
-
-meta instance string_coe : has_coe string json2 := ⟨json2.of_string⟩
-meta instance int_coe : has_coe nat json2 := ⟨json2.of_nat⟩
-meta instance bool_coe : has_coe bool json2 := ⟨json2.of_bool⟩
-meta instance array_coe : has_coe (list json2) json2 := ⟨json2.array⟩
-meta instance : inhabited json2 := ⟨json2.null⟩
-
-meta def to_format : json2 → format
-| (of_string s) := string.quote s
-| (of_nat i) := to_string i
-| (of_bool tt) := "true"
-| (of_bool ff) := "false"
-| (null) := "null"
-| (object kvs) := "{ " ++ (format.group $ format.nest 2 $ format.join $ list.intersperse (", " ++ format.line) $ kvs.map $ λ ⟨k,v⟩, string.quote k ++ ":" ++ to_format v) ++ "}"
-| (array js) := list.to_format $ js.map to_format
-
-meta instance : has_to_format json2 := ⟨to_format⟩
-
-end json2
 
 
 
@@ -347,9 +313,379 @@ end tactic_state_serialization
 -- serialization for tactic_state_data
 -----------------------
 
--- fill in this function
-meta def serialize_tactic_state_data (tsd : tactic_state_data) : tactic string := do
-sorry
+inductive json_light : Type
+| of_string : string → json_light
+| of_nat : nat → json_light
+| of_bool : bool → json_light
+| null : json_light
+| object : list (string × json_light) → json_light
+| array : list json_light → json_light
+
+namespace json_light
+
+meta def to_format : json_light → format
+| (of_string s) := string.quote s
+| (of_nat i) := to_string i
+| (of_bool tt) := "true"
+| (of_bool ff) := "false"
+| (null) := "null"
+| (object kvs) := "{ " ++ (format.group $ format.nest 2 $ format.join $ list.intersperse (", " ++ format.line) $ kvs.map $ λ ⟨k,v⟩, string.quote k ++ ":" ++ to_format v) ++ "}"
+| (array js) := list.to_format $ js.map to_format
+
+meta def to_compact_string : json_light → string
+| (of_string s) := string.quote s
+| (of_nat i) := to_string i
+| (of_bool tt) := "true"
+| (of_bool ff) := "false"
+| (null) := "null"
+| (object kvs) := "{" ++ (string.join $ list.intersperse "," $ kvs.map $ λ ⟨k,v⟩, string.quote k ++ ":" ++ to_compact_string v) ++ "}"
+| (array js) := "[" ++ (string.join $ list.intersperse "," $ js.map to_compact_string) ++ "]"
+
+meta instance : has_to_format json_light := ⟨to_format⟩
+meta instance : has_to_string json_light := ⟨to_compact_string⟩ 
+meta instance : has_repr json_light := ⟨to_compact_string⟩
+
+end json_light
+
+section has_to_json_light
+universe u
+
+meta class has_to_json_light (α : Type u) : Type (u+1) :=
+(to_json_light : α → json_light)
+
+meta class has_to_tactic_json_light (α : Type u) : Type (u+1) :=
+(to_tactic_json_light : α → tactic json_light)
+
+meta def to_tactic_json_light {α : Type u} [has_to_tactic_json_light α] : α → tactic json_light :=
+has_to_tactic_json_light.to_tactic_json_light
+
+end has_to_json_light
+
+def name_to_json_light : name → json_light
+| name.anonymous := json_light.array [json_light.of_string "name.anonymous"]
+| (name.mk_string str nm) := json_light.array $
+  [json_light.of_string "name.mk_string", json_light.of_string str, name_to_json_light nm]
+| (name.mk_numeral u nm) := json_light.array $
+  [json_light.of_string "name.mk_numeral", json_light.of_nat u.to_nat, name_to_json_light nm]
+
+meta instance : has_to_tactic_json_light name :=
+⟨pure ∘ name_to_json_light⟩
+
+meta instance : has_to_tactic_json_light ℕ :=
+⟨pure ∘ json_light.of_nat⟩
+
+meta instance : has_to_tactic_json_light bool :=
+⟨pure ∘ json_light.of_bool⟩
+
+meta instance : has_to_tactic_json_light string :=
+⟨pure ∘ json_light.of_string⟩
+
+meta def list_to_tactic_json_light {α} [has_to_tactic_json_light α] : list α → tactic json_light
+| (list.nil) := do
+  let constr := `list.nil,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (list.cons arg1 arg2) := do
+  let constr := `list.cons,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- list_to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance {α} [has_to_tactic_json_light α] : has_to_tactic_json_light (list α) := 
+⟨list_to_tactic_json_light⟩
+
+meta def option_to_tactic_json_light {α} [has_to_tactic_json_light α] : option α → tactic json_light
+| option.none := do
+  let constr := `option.none,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (option.some arg1) := do
+  let constr := `option.some,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance {α} [has_to_tactic_json_light α] : has_to_tactic_json_light (option α) := 
+⟨option_to_tactic_json_light⟩
+
+meta def prod_to_tactic_json_light {α β} [has_to_tactic_json_light α] [has_to_tactic_json_light β] : α × β → tactic json_light
+| ⟨arg1, arg2⟩ := do
+  let constr := `prod.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance {α β} [has_to_tactic_json_light α] [has_to_tactic_json_light β] : has_to_tactic_json_light (α × β) := 
+⟨prod_to_tactic_json_light⟩
+
+meta def level_to_tactic_json_light : level → tactic json_light 
+| (level.zero) := do
+  let constr := `level.zero,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (level.succ arg1) := do
+  let constr := `level.succ,
+  arg1' <- level_to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (level.max arg1 arg2) := do
+  let constr := `level.max,
+  arg1' <- level_to_tactic_json_light arg1,
+  arg2' <- level_to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (level.imax arg1 arg2) := do
+  let constr := `level.imax,
+  arg1' <- level_to_tactic_json_light arg1,
+  arg2' <- level_to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (level.param arg1) := do
+  let constr := `level.param,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (level.mvar arg1) := do
+  let constr := `level.mvar,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light level := 
+⟨level_to_tactic_json_light⟩
+
+meta def binder_info_to_tactic_json_light : binder_info → tactic json_light 
+| binder_info.default := do
+  let constr := `binder_info.default,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| binder_info.implicit := do
+  let constr := `binder_info.implicit,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| binder_info.strict_implicit := do
+  let constr := `binder_info.strict_implicit,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| binder_info.inst_implicit := do
+  let constr := `binder_info.inst_implicit,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| binder_info.aux_decl := do
+  let constr := `binder_info.aux_decl,
+  let args : list json_light := [],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light binder_info := 
+⟨binder_info_to_tactic_json_light⟩
+
+section expr'
+
+meta inductive expr'
+| var         : nat → expr'
+| sort        : level → expr'
+| const       : name → list level → expr'
+| mvar        (unique : name)  (pretty : name)  (type : expr') : expr'
+| local_const (unique : name) (pretty : name) (bi : binder_info) (type : expr') : expr'
+| app         : expr' → expr' → expr'
+| lam        (var_name : name) (bi : binder_info) (var_type : expr') (body : expr') : expr'
+| pi         (var_name : name) (bi : binder_info) (var_type : expr') (body : expr') : expr'
+| elet       (var_name : name) (type : expr') (assignment : expr') (body : expr') : expr'
+
+meta def expr.to_expr' : expr → tactic expr'
+| (expr.var k) := pure $ expr'.var k
+| (expr.sort l) := pure $ (expr'.sort l)
+| (expr.const n ls) := pure $ (expr'.const n ls)
+| (expr.mvar un pr ty) := (expr'.mvar un pr <$> expr.to_expr' ty)
+| (expr.local_const un pr bi ty) := (expr'.local_const un pr bi <$> expr.to_expr' ty)
+| (expr.app e₁ e₂) := (expr'.app <$> (expr.to_expr' e₁) <*> (expr.to_expr' e₂))
+| (expr.lam nm bi tp body) := (expr'.lam nm bi <$> (expr.to_expr' tp) <*> (expr.to_expr' body))
+| (expr.pi nm bi tp body) := (expr'.pi nm bi <$> (expr.to_expr' tp) <*> (expr.to_expr' body))
+| (expr.elet nm tp assn body) := (expr'.elet nm <$> (expr.to_expr' tp) <*> (expr.to_expr' assn) <*> (expr.to_expr' body))
+| (expr.macro md es) := tactic.fail "[expr.to_expr'] no macros allowed!"
+
+end expr'
+
+meta def expr'_to_tactic_json_light : expr' → tactic json_light
+| (expr'.var arg1) := do
+  let constr := `expr'.var,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.sort arg1) := do
+  let constr := `expr'.sort,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.const arg1 arg2) := do
+  let constr := `expr'.const,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.mvar arg1 arg2 arg3) := do
+  let constr := `expr'.mvar,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- expr'_to_tactic_json_light arg3,
+  let args : list json_light := [arg1', arg2', arg3'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.local_const arg1 arg2 arg3 arg4) := do
+  let constr := `expr'.local_const,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- to_tactic_json_light arg3,
+  arg4' <- expr'_to_tactic_json_light arg4,
+  let args : list json_light := [arg1', arg2', arg3', arg4'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.app arg1 arg2) := do
+  let constr := `expr'.app,
+  arg1' <- expr'_to_tactic_json_light arg1,
+  arg2' <- expr'_to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.lam arg1 arg2 arg3 arg4) := do
+  let constr := `expr'.lam,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- expr'_to_tactic_json_light arg3,
+  arg4' <- expr'_to_tactic_json_light arg4,
+  let args : list json_light := [arg1', arg2', arg3', arg4'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.pi arg1 arg2 arg3 arg4) := do
+  let constr := `expr'.pi,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- expr'_to_tactic_json_light arg3,
+  arg4' <- expr'_to_tactic_json_light arg4,
+  let args : list json_light := [arg1', arg2', arg3', arg4'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (expr'.elet arg1 arg2 arg3 arg4) := do
+  let constr := `expr'.elet,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- expr'_to_tactic_json_light arg2,
+  arg3' <- expr'_to_tactic_json_light arg3,
+  arg4' <- expr'_to_tactic_json_light arg4,
+  let args : list json_light := [arg1', arg2', arg3', arg4'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light expr := 
+⟨λ e, e.erase_annotations.to_expr' >>= expr'_to_tactic_json_light⟩
+
+
+meta def local_decl_to_tactic_json_light : local_decl → tactic json_light
+| ⟨arg1, arg2, arg3, arg4, arg5, arg6⟩ := do
+  let constr := `local_decl.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- to_tactic_json_light arg3,
+  arg4' <- to_tactic_json_light arg4,
+  arg5' <- to_tactic_json_light arg5,
+  arg6' <- to_tactic_json_light arg6,
+  let args : list json_light := [arg1', arg2', arg3', arg4', arg5', arg6'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light local_decl := 
+⟨local_decl_to_tactic_json_light⟩
+
+meta def mvar_decl_to_tactic_json_light : mvar_decl → tactic json_light
+| ⟨arg1, arg2, arg3, arg4, arg5, arg6⟩ := do
+  let constr := `mvar_decl.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- to_tactic_json_light arg3,
+  arg4' <- to_tactic_json_light arg4,
+  arg5' <- to_tactic_json_light arg5,
+  arg6' <- to_tactic_json_light arg6,
+  let args : list json_light := [arg1', arg2', arg3', arg4', arg5', arg6'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light mvar_decl := 
+⟨mvar_decl_to_tactic_json_light⟩
+
+meta def univ_mvar_decl_to_tactic_json_light : univ_mvar_decl → tactic json_light
+| ⟨arg1, arg2⟩ := do
+  let constr := `univ_mvar_decl.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light univ_mvar_decl := 
+⟨univ_mvar_decl_to_tactic_json_light⟩
+
+meta def local_decl2_to_tactic_json_light : local_decl2 → tactic json_light
+| ⟨arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8⟩ := do
+  let constr := `local_decl2.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- to_tactic_json_light arg3,
+  arg4' <- to_tactic_json_light arg4,
+  arg5' <- to_tactic_json_light arg5,
+  arg6' <- to_tactic_json_light arg6,
+  arg7' <- to_tactic_json_light arg7,
+  arg8' <- to_tactic_json_light arg8,
+  let args : list json_light := [arg1', arg2', arg3', arg4', arg5', arg6', arg7', arg8'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light local_decl2 := 
+⟨local_decl2_to_tactic_json_light⟩
+
+meta def context_decl_to_tactic_json_light : context.decl → tactic json_light
+| (context.decl.mvar_decl arg1) := do
+  let constr := `context.decl.mvar_decl,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (context.decl.univ_mvar_decl arg1) := do
+  let constr := `context.decl.univ_mvar_decl,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+| (context.decl.local_decl arg1) := do
+  let constr := `context.decl.local_decl,
+  arg1' <- to_tactic_json_light arg1,
+  let args : list json_light := [arg1'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light context.decl := 
+⟨context_decl_to_tactic_json_light⟩
+
+
+meta instance : has_to_tactic_json_light tactic.tag := 
+⟨list_to_tactic_json_light⟩
+
+meta def tactic_state_data_to_tactic_json_light : tactic_state_data → tactic json_light
+| ⟨arg1, arg2⟩ := do
+  let constr := `tactic_state_data.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  let args : list json_light := [arg1', arg2'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light tactic_state_data := 
+⟨tactic_state_data_to_tactic_json_light⟩
+
+meta structure EvaluationInput : Type :=
+(decl_nm : name)
+(ts_data : tactic_state_data)
+(tactic_string : string)
+(open_namespaces : list name)
+
+meta def evaluation_input_data_to_tactic_json_light : EvaluationInput → tactic json_light
+| ⟨arg1, arg2, arg3, arg4⟩ := do
+  let constr := `EvaluationInput.mk,
+  arg1' <- to_tactic_json_light arg1,
+  arg2' <- to_tactic_json_light arg2,
+  arg3' <- to_tactic_json_light arg3,
+  arg4' <- to_tactic_json_light arg4,
+  let args : list json_light := [arg1', arg2', arg3', arg4'],
+  return (json_light.array [name_to_json_light constr, json_light.array args])
+
+meta instance : has_to_tactic_json_light EvaluationInput := 
+⟨evaluation_input_data_to_tactic_json_light⟩
 
 
 
@@ -448,8 +784,16 @@ trace_data_num "tactic_state" ts_key "goal_count" goals.length,
 -- tactic state serialization
 result <- tactic.capture $ do {
   ts_data <- tactic_state_data.get,
-  ts_str <- serialize_tactic_state_data ts_data,
-  return ts_str
+  decl <- tactic.decl_name,
+  open_nmspaces <- tactic.open_namespaces,
+  let eval_input := { EvaluationInput .
+    decl_nm := decl,
+    ts_data := ts_data,
+    tactic_string := "TACTIC_STRING",
+    open_namespaces := open_nmspaces
+  },
+  ts_json <- to_tactic_json_light eval_input,
+  return (to_string ts_json)
 },
 match result with
 | (interaction_monad.result.success ts_str _) := do {
