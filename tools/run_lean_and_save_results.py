@@ -123,9 +123,13 @@ def run_lean_file_and_save_output(lean_file: Path, out_directory: Path):
     stdout = run_lean_make(lean_file, out_directory)
 
 def main():
-    assert len(sys.argv) == 3, sys.argv
-    lean_file = Path(sys.argv[1])
-    out_directory = Path(sys.argv[2])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("lean_file")
+    parser.add_argument("out_directory")
+    opts = parser.parse_args()
+    lean_file = Path(opts.lean_file)
+    out_directory = Path(opts.out_directory)
     run_lean_file_and_save_output(lean_file, out_directory)
 
 if __name__ == "__main__":

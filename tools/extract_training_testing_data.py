@@ -69,8 +69,11 @@ def gather_data_for_model(
     return df
 
 def main():
-    assert len(sys.argv) == 2
-    data_dir = Path(sys.argv[1])
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("data_dir")
+    opts = parser.parse_args()
+    data_dir = Path(opts.data_dir)
     assert data_dir.exists(), data_dir
     assert data_dir.is_dir(), data_dir
 
