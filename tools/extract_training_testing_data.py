@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import pandas as pd 
 import numpy as np
+import json
 
 RAW_TRACED_DATA_DIR = "raw_traced_data"
 EXTRACTED_PROOF_DATA_DIR = "extracted_proof_data"
@@ -25,11 +26,14 @@ def gather_data_for_model(
     df2['tactic_state_key'] = df2['filename'] + ":" + df2['key']
     df2['tactic_instance_key'] = df2['filename'] + ":" + df2['tactic_instance']
     df2['tactic_key'] = df2['tactic_instance_key'].apply(lambda k: ":".join(k.split(":")[:-1]))
-    df2 = df2[['tactic_state_key', 'tactic_instance_key', 'tactic_key', 'decl_name', 'open_namespaces']]
+    df2 = df2[['tactic_state_key', 'tactic_instance_key', 'tactic_key', 'decl_name', 'open_namespaces', 'tactic_state_serialization']]
     df2['decl_name'] = df2['decl_name'].str.replace("`", "")
     df2['open_namespaces'] = df2['open_namespaces'].str.replace("`", "")
     df2['open_namespaces'] = df2['open_namespaces'].str.replace(r"\[anonymous\] ?", "", regex=True)
+    df2['evaluation_json'] = df.apply(lambda x:x['tactic_state_serialization'].replace('"TACTIC_STRING"', json.dumps(x['human_tactic_code'])), axis=1)
     df2 = df2.set_index('tactic_state_key')
+    df = df.dropna()  
+    
 
     df = df.join(df2, how='inner')
     df = df.set_index('tactic_key')
