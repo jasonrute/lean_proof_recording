@@ -21,6 +21,7 @@ INTERACTIVE_BASE_LEAN_FILE = Path("_target/deps/lean/library/init/meta/interacti
 INTERACTIVE_BASE_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/interactive_base_modifications.lean")
 
 TACTIC_INTERACTIVE_LEAN_FILE = Path("_target/deps/lean/library/init/meta/interactive.lean")
+TACTIC_INTERACTIVE_LEAN_FILE_MODIFICATIONS1 = Path("lean_modifications/tactic_interactive_modifications1.lean")
 TACTIC_INTERACTIVE_LEAN_FILE_MODIFICATIONS = Path("lean_modifications/tactic_interactive_modifications.lean")
 
 CONV_INTERACTIVE_LEAN_FILE = Path("_target/deps/lean/library/init/meta/converter/interactive.lean")
@@ -63,14 +64,25 @@ def get_modification(modification_lean: Path) -> str:
     raise Exception("No modification found.")
 
 def insert_tactic_tracing_code(dryrun: bool, sexp:bool):
+    # tactic
     l1, l2 = find_code_location(TACTIC_LEAN_FILE, ISTEP_CODE)
-    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS) if not sexp else get_modification(TACTIC_LEAN_FILE_MODIFICATIONS_SEXP)
-
+    tactic_recording_code = get_modification(TACTIC_LEAN_FILE_MODIFICATIONS)
+    
     modifier = LeanModifier(TACTIC_LEAN_FILE)
     modifier.delete_lines(l1, l2)
     modifier.add_lines_at_end(tactic_recording_code)
     modifier.build_file(dryrun=dryrun)
 
+    # (tactic) interactive
+    if not sexp:
+        tactic_recording_code = get_modification(TACTIC_INTERACTIVE_LEAN_FILE_MODIFICATIONS1)
+    else:
+        raise Exception("sexp needs to be reimplemented again")
+
+    modifier = LeanModifier(TACTIC_INTERACTIVE_LEAN_FILE)
+    modifier.add_lines_after_imports(tactic_recording_code)
+    modifier.build_file(dryrun=dryrun)
+    
 def insert_param_tracing_code(dryrun: bool):
     # interactive base
     tactic_recording_code = get_modification(INTERACTIVE_BASE_LEAN_FILE_MODIFICATIONS)
