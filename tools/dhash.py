@@ -13,6 +13,6 @@ def hash_string_to_float(arg):
 
 def get_split(arg):
     float_hash = hash_string_to_float(arg)
-    if float_hash < 0.8: return "train"
-    elif float_hash < 0.9: return "valid"
+    if float_hash < 0.80: return "train"
+    elif float_hash < 0.85: return "valid"
     else: return "test"
