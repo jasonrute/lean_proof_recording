@@ -1,7 +1,9 @@
 from pathlib import Path
 import sys
-import pandas as pd 
+import pandas as pd
 import numpy as np
+from dhash import get_split
+from tqdm import tqdm
 
 RAW_TRACED_DATA_DIR = "raw_traced_data"
 EXTRACTED_PROOF_DATA_DIR = "extracted_proof_data"
@@ -48,25 +50,35 @@ def gather_data_for_model(
     # remove solve1 tactics
     if no_solve1:
         df = df[df['tactic_class'] != 'solve1']
-    
+
     # clean input
     df['cleaned_goal'] = (
         df['goal_pp']
         # remove tags
         .str.replace(r"^[^:⊢]*\n", "", regex=True)
         # remove pp indenting (including extra line wraps)
-        .str.replace(r"\n +", " ", regex=True) 
+        .str.replace(r"\n +", " ", regex=True)
         # replace new lines with tabs
         .str.replace(r"\n", "\t", regex=True)
     )
+    # train-test-validate split based on decl_name
 
-    # train-test-validate split based on proof_key
-    proof_keys = df['proof_key'].unique()
-    rng = np.random.default_rng(seed=0)
-    tvt = rng.choice(['train', 'valid', 'test'], p=[0.8, 0.1, 0.1], size=len(proof_keys))
-    tvt_split = pd.Series(tvt, index=proof_keys)
-    tvt_split
-    df['split'] = df['proof_key'].map(tvt_split) 
+    decl_names = df["decl_name"].unique()
+    tvt = [get_split(nm) for nm in decl_names]
+    tvt_split = pd.Series(tvt, index=decl_names)
+    df["split"] = df["decl_name"].map(tvt_split)
+
+
+    # tvt =
+
+
+    # # train-test-validate split based on proof_key
+    # proof_keys = df['proof_key'].unique()
+    # rng = np.random.default_rng(seed=0)
+    # tvt = rng.choice(['train', 'valid', 'test'], p=[0.8, 0.1, 0.1], size=len(proof_keys))
+    # tvt_split = pd.Series(tvt, index=proof_keys)
+    # tvt_split
+    # df['split'] = df['proof_key'].map(tvt_split)
 
     return df
 
@@ -84,41 +96,55 @@ def main():
     assert data_dir.is_dir(), data_dir
 
     # load previously extracted data
+    print("[extract_training_test_data] LOADING PREVIOUSLY EXTRACTED DATA")
     tactic_state_goal = pd.read_json(data_dir / RAW_TRACED_DATA_DIR / 'tactic_state_goal.json', orient='records')
     tactic_state = pd.read_json(data_dir / RAW_TRACED_DATA_DIR / 'tactic_state.json', orient='records')
     tactics = pd.read_json(data_dir / EXTRACTED_PROOF_DATA_DIR / 'tactics.json', orient='records')
 
     # process
+    print("[extract_training_test_data] PROCESSING TO FULL DATA")
     full_data = gather_data_for_model(tactic_state_goal, tactic_state, tactics, no_solve1=opts.no_solve1)
 
     # save to files
-    cleaned_data_dir = data_dir / CLEANED_TRAINING_DATA_DIR 
+    cleaned_data_dir = data_dir / CLEANED_TRAINING_DATA_DIR
     cleaned_data_dir.mkdir(exist_ok=True)
 
     full_data.to_csv(cleaned_data_dir / "data_and_metadata.csv")
-    
+
     for split in ['train', 'valid', 'test']:
+        print(f"[extract_training_test_data] CREATING {split} SPLIT")
         src_file = cleaned_data_dir / f"{split}.src"
         tgt_file = cleaned_data_dir / f"{split}.tgt"
+        name_file = cleaned_data_dir / f"{split}.names"
         data_split = full_data[full_data['split'] == split]
         skip_count = 0
         example_set = set()
+        example_name_set = set()
         with open(str(src_file), "w") as src_handle:
             with open(str(tgt_file), "w") as tgt_handle:
-                for idx, row in data_split.iterrows():
-                    # discard solve1s applied to only 1 goal to avoid duplication
-                    if row["tactic_class"] == "solve1"\
-                       and row["cleaned_goal"].count("⊢") == 1:
-                        skip_count += 1; continue
-                    example_src = row["cleaned_goal"]
-                    example_tgt = row["human_tactic_code"]
-                    if (example_src, example_tgt) in example_set: continue
-                    else:  example_set.add((example_src, example_tgt))
-                    src_handle.write(example_src + "\n")
-                    tgt_handle.write(example_tgt + "\n")
+                with open(str(name_file), "w") as name_handle:
+                    for idx, row in tqdm(data_split.iterrows(), total=len(data_split.index)):
+                        # discard solve1s applied to only 1 goal to avoid duplication
+                        if row["tactic_class"] == "solve1"\
+                           and row["cleaned_goal"].count("⊢") == 1:
+                            skip_count += 1; continue
+                        example_src = row["cleaned_goal"]
+                        example_tgt = row["human_tactic_code"]
+                        example_name = row["decl_name"] + " " + row["open_namespaces"]
 
-                print(f"SKIPPED {skip_count} FOR SPLIT {split}")
-            
+                        if (example_src, example_tgt) in example_set: continue
+                        else:  example_set.add((example_src, example_tgt))
+
+                        src_handle.write(example_src + "\n")
+                        tgt_handle.write(example_tgt + "\n")
+                        if row["decl_name"] in example_name_set:
+                            pass
+                        else:
+                            name_handle.write(example_name + "\n")
+                            example_name_set.add(row["decl_name"])
+
+        print(f"SKIPPED {skip_count} FOR SPLIT {split}")
+
         # for src_tgt in ['src', 'tgt']:
         #     path = cleaned_data_dir / f"{split}.{src_tgt}"
         #     if src_tgt == "src":
