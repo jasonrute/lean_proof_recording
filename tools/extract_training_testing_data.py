@@ -118,6 +118,7 @@ def main():
         name_file = cleaned_data_dir / f"{split}.names"
         data_split = full_data[full_data['split'] == split]
         skip_count = 0
+        multiple_goal_count = 0
         example_set = set()
         example_name_set = set()
         with open(str(src_file), "w") as src_handle:
@@ -128,6 +129,8 @@ def main():
                         if row["tactic_class"] == "solve1"\
                            and row["cleaned_goal"].count("⊢") == 1:
                             skip_count += 1; continue
+                        if row["cleaned_goal"].count("⊢") > 1:
+                            multiple_goal_count += 1
                         example_src = row["cleaned_goal"]
                         example_tgt = row["human_tactic_code"]
                         example_name = row["decl_name"] + " " + row["open_namespaces"]
@@ -144,6 +147,7 @@ def main():
                             example_name_set.add(row["decl_name"])
 
         print(f"SKIPPED {skip_count} FOR SPLIT {split}")
+        print(f"MULTIPLE GOAL DATAPOINTS: {multiple_goal_count}")
 
         # for src_tgt in ['src', 'tgt']:
         #     path = cleaned_data_dir / f"{split}.{src_tgt}"
