@@ -111,6 +111,7 @@ def main():
 
     full_data.to_csv(cleaned_data_dir / "data_and_metadata.csv")
 
+    example_name_set = set()
     for split in ['train', 'valid', 'test']:
         print(f"[extract_training_test_data] CREATING {split} SPLIT")
         src_file = cleaned_data_dir / f"{split}.src"
@@ -120,7 +121,6 @@ def main():
         skip_count = 0
         multiple_goal_count = 0
         example_set = set()
-        example_name_set = set()
         with open(str(src_file), "w") as src_handle:
             with open(str(tgt_file), "w") as tgt_handle:
                 with open(str(name_file), "w") as name_handle:
