@@ -4,6 +4,7 @@ import pandas as pd
 import numpy as np
 from dhash import get_split
 from tqdm import tqdm
+import json
 
 RAW_TRACED_DATA_DIR = "raw_traced_data"
 EXTRACTED_PROOF_DATA_DIR = "extracted_proof_data"
@@ -67,8 +68,6 @@ def gather_data_for_model(
     tvt = [get_split(nm) for nm in decl_names]
     tvt_split = pd.Series(tvt, index=decl_names)
     df["split"] = df["decl_name"].map(tvt_split)
-
-
     # tvt =
 
 
@@ -117,6 +116,7 @@ def main():
         src_file = cleaned_data_dir / f"{split}.src"
         tgt_file = cleaned_data_dir / f"{split}.tgt"
         name_file = cleaned_data_dir / f"{split}.names"
+        name_index_file = cleaned_data_dir / f"{split}.index"
         data_split = full_data[full_data['split'] == split]
         skip_count = 0
         multiple_goal_count = 0
@@ -124,27 +124,30 @@ def main():
         with open(str(src_file), "w") as src_handle:
             with open(str(tgt_file), "w") as tgt_handle:
                 with open(str(name_file), "w") as name_handle:
-                    for idx, row in tqdm(data_split.iterrows(), total=len(data_split.index)):
-                        # discard solve1s applied to only 1 goal to avoid duplication
-                        if row["tactic_class"] == "solve1"\
-                           and row["cleaned_goal"].count("⊢") == 1:
-                            skip_count += 1; continue
-                        if row["cleaned_goal"].count("⊢") > 1:
-                            multiple_goal_count += 1
-                        example_src = row["cleaned_goal"]
-                        example_tgt = row["human_tactic_code"]
-                        example_name = row["decl_name"] + " " + row["open_namespaces"]
+                    with open(str(name_index_file), "w") as name_index_handle:
+                        for idx, row in tqdm(data_split.iterrows(), total=len(data_split.index)):
+                            # discard solve1s applied to only 1 goal to avoid duplication
+                            if row["tactic_class"] == "solve1"\
+                               and row["cleaned_goal"].count("⊢") == 1:
+                                skip_count += 1; continue
+                            if row["cleaned_goal"].count("⊢") > 1:
+                                multiple_goal_count += 1
+                            example_src = row["cleaned_goal"]
+                            example_tgt = row["human_tactic_code"]
+                            example_name = row["decl_name"] + " " + row["open_namespaces"]
 
-                        if (example_src, example_tgt) in example_set: continue
-                        else:  example_set.add((example_src, example_tgt))
+                            if (example_src, example_tgt) in example_set: continue
+                            else:  example_set.add((example_src, example_tgt))
 
-                        src_handle.write(example_src + "\n")
-                        tgt_handle.write(example_tgt + "\n")
-                        if row["decl_name"] in example_name_set:
-                            pass
-                        else:
-                            name_handle.write(example_name + "\n")
-                            example_name_set.add(row["decl_name"])
+                            src_handle.write(example_src + "\n")
+                            tgt_handle.write(example_tgt + "\n")
+                            if row["decl_name"] in example_name_set or row["decl_name"] == "_example":
+                                pass
+                            else:
+                                name_handle.write(example_name + "\n")
+                                example_name_set.add(row["decl_name"])
+                            name_index_entry = json.dumps(dict(src=row["cleaned_goal"], decl_nm=row["decl_name"])) + "\n"
+                            name_index_handle.write(name_index_entry)
 
         print(f"SKIPPED {skip_count} FOR SPLIT {split}")
         print(f"MULTIPLE GOAL DATAPOINTS: {multiple_goal_count}")
