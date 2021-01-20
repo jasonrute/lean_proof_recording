@@ -17,6 +17,24 @@ is being recorded
 -/
 
 --PR BEGIN MODIFICATION
-meta def tactic_state.to_flattened_string (ts : tactic_state) : tactic string := pure ts.to_format.to_string
+private meta def set_bool_option (n : name) (v : bool) : tactic unit :=
+do s ← tactic.read,
+   tactic.write $ tactic_state.set_options s (options.set_bool (tactic_state.get_options s) n v)
+
+meta def enable_full_names : tactic unit := do {
+  set_bool_option `pp.full_names true
+}
+
+meta def with_full_names {α} (tac : tactic α) : tactic α :=
+tactic.save_options $ enable_full_names *> tac
+
+meta def tactic_state.to_flattened_string (ts : tactic_state) : tactic string := do {
+  ts₀ ← tactic.read,
+  tactic.write ts,
+  result ← with_full_names $ (tactic.read >>= λ ts, pure ts.to_format.to_string),
+  tactic.write ts₀,
+  pure result
+}
+
 local notation `PRINT_TACTIC_STATE` := tactic_state.to_flattened_string
 --PR END MODIFICATION
