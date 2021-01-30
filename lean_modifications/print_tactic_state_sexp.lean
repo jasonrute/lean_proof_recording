@@ -127,7 +127,12 @@ meta def sexp_of_expr : (option ℕ) → expr → tactic (sexp string) := λ fue
     -- pure $ flip mk_type_ascription tp_sexp $ sexp.list [sexp.atom pt.to_string] -- note: drop binder info for now
    pure (sexp.atom pt.to_string)
   }
+  -- version without "APP" head symbol
   | e@(app e₁ e₂) := (λ s₁ s₂, sexp.list [s₁, s₂]) <$> sexp_of_expr ((flip nat.sub 1) <$> fuel) e₁ <*> sexp_of_expr ((flip nat.sub 1) <$> fuel) e₂
+
+  -- version with "APP" head symbol -- switch if needed
+  -- | e@(app e₁ e₂) := (λ s₁ s₂, sexp.list [sexp.atom "APP", s₁, s₂]) <$> sexp_of_expr ((flip nat.sub 1) <$> fuel) e₁ <*> sexp_of_expr ((flip nat.sub 1) <$> fuel) e₂
+
   -- | e@(app e₁ e₂) := sexp.list <$> ((::) <$> (sexp_of_expr ((flip nat.sub 1) <$> fuel) $ get_app_fn e) <*> (get_app_args e).mmap (sexp_of_expr ((flip nat.sub 1) <$> fuel)))
   | e@(lam var_name b_info var_type body) := do {
     ⟨[b], e'⟩ ← open_n_lambdas e 1,

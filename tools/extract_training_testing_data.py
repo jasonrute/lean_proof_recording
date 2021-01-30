@@ -86,6 +86,7 @@ def _parse_main():
     parser = argparse.ArgumentParser()
     parser.add_argument("data_dir")
     parser.add_argument("--no-solve1", action="store_true", dest="no_solve1")
+    parser.add_argument("--sexp", action="store_true", dest="sexp")
     return parser.parse_args()
 
 def main():
@@ -121,6 +122,7 @@ def main():
         skip_count = 0
         multiple_goal_count = 0
         example_set = set()
+        goal_tk = "⊢" if not opts.sexp else "GOAL"
         with open(str(src_file), "w") as src_handle:
             with open(str(tgt_file), "w") as tgt_handle:
                 with open(str(name_file), "w") as name_handle:
@@ -128,9 +130,9 @@ def main():
                         for idx, row in tqdm(data_split.iterrows(), total=len(data_split.index)):
                             # discard solve1s applied to only 1 goal to avoid duplication
                             if row["tactic_class"] == "solve1"\
-                               and row["cleaned_goal"].count("⊢") == 1:
+                               and row["cleaned_goal"].count(goal_tk) == 1:
                                 skip_count += 1; continue
-                            if row["cleaned_goal"].count("⊢") > 1:
+                            if row["cleaned_goal"].count(goal_tk) > 1:
                                 multiple_goal_count += 1
                             example_src = row["cleaned_goal"]
                             example_tgt = row["human_tactic_code"]
