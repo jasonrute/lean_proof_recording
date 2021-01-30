@@ -162,21 +162,35 @@ end sexp_of_expr
 end open_binders
 
 section 
+private meta def set_bool_option (n : name) (v : bool) : tactic unit :=
+do s ← tactic.read,
+   tactic.write $ tactic_state.set_options s (options.set_bool (tactic_state.get_options s) n v)
+
+private meta def enable_full_names : tactic unit := do {
+  set_bool_option `pp.full_names true
+}
+
+private meta def with_full_names {α} (tac : tactic α) : tactic α :=
+tactic.save_options $ enable_full_names *> tac
+
 open sexp tactic
 meta def tactic_state.to_sexp (ts : tactic_state) : tactic (sexp string) := do
   λ _, interaction_monad.result.success () ts,
   -- do { gs ← tactic.get_goals, guard (gs.length = 1) <|>
   --      tactic.trace ("[tactic_state.to_sexp] WARNING: NUM GOALS" ++ gs.length.repr) },
-  hyps ← tactic.local_context,
-  annotated_hyps ← hyps.mmap (λ h, prod.mk h <$> tactic.infer_type h),
-  hyps_sexp ← do {
-    hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr SEXP_DEPTH_LIMIT hc <*> sexp_of_expr none ht,
-    pure $ sexp.list $ [sexp.atom "HYPS"] ++ hyps_sexps
-  },
-  goal_sexp ← (λ x, sexp.list [sexp.atom "GOAL", x]) <$> (tactic.target >>= sexp_of_expr SEXP_DEPTH_LIMIT),
-  pure $ sexp.list [sexp.atom "GOAL_STATE", hyps_sexp, goal_sexp]
+  with_full_names $ do {
+    hyps ← tactic.local_context,
+    annotated_hyps ← hyps.mmap (λ h, prod.mk h <$> tactic.infer_type h),
+    hyps_sexp ← do {
+      hyps_sexps ← annotated_hyps.mmap $ function.uncurry $ λ hc ht, mk_type_ascription <$> sexp_of_expr SEXP_DEPTH_LIMIT hc <*> sexp_of_expr none ht,
+      pure $ sexp.list $ [sexp.atom "HYPS"] ++ hyps_sexps
+    },
+    goal_sexp ← (λ x, sexp.list [sexp.atom "GOAL", x]) <$> (tactic.target >>= sexp_of_expr SEXP_DEPTH_LIMIT),
+    pure $ sexp.list [sexp.atom "GOAL_STATE", hyps_sexp, goal_sexp]
+  }
 end 
 
 local notation `PRINT_TACTIC_STATE` := λ ts, (format.to_string ∘ format.flatten ∘ sexp.to_format) <$> tactic_state.to_sexp ts
+
 -- end sexp modifications
 --PR END MODIFICATION

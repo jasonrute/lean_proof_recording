@@ -21,11 +21,11 @@ private meta def set_bool_option (n : name) (v : bool) : tactic unit :=
 do s ← tactic.read,
    tactic.write $ tactic_state.set_options s (options.set_bool (tactic_state.get_options s) n v)
 
-meta def enable_full_names : tactic unit := do {
+private meta def enable_full_names : tactic unit := do {
   set_bool_option `pp.full_names true
 }
 
-meta def with_full_names {α} (tac : tactic α) : tactic α :=
+private meta def with_full_names {α} (tac : tactic α) : tactic α :=
 tactic.save_options $ enable_full_names *> tac
 
 meta def tactic_state.to_flattened_string (ts : tactic_state) : tactic string := do {
