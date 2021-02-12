@@ -324,7 +324,7 @@ class LeanFile:
 
 if __name__ == "__main__":
     #filename = "tmp/proof_recording_example.lean"
-    filename = "/Users/jasonrute/.elan/toolchains/leanprover-community-lean-3.20.0/lib/lean/library/init/data/nat/bitwise.lean"
+    filename = "ANONYMIZED"
 
     assert not LeanFile.is_name_char('λ')
     assert not LeanFile.is_name_char('Π')

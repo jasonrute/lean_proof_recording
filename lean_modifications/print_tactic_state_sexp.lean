@@ -100,7 +100,7 @@ meta def sexp.concat {m} [monad m] [monad_fail m] {α} : (sexp α) → (sexp α)
 | (sexp.list xs) (sexp.list ys) := pure (sexp.list $ xs ++ ys)
 | _ _ := monad_fail.fail "sexp.concat failed"
 
-local infix `<+>`:50 := sexp.concat -- TODO(jesse): just write an applicative instance, don't want to think about `seq` now though
+local infix `<+>`:50 := sexp.concat
 
 meta def sexp.map {α β : Type*} (f : α → β) : sexp α → sexp β
 | (sexp.atom x) := (sexp.atom $ f x)
@@ -111,7 +111,6 @@ meta instance : functor sexp :=
 
 def mk_type_ascription : sexp string → sexp string → sexp string := λ s₁ s₂, sexp.list [(sexp.atom ":"), s₁, s₂]
 
--- TODO(jesse): supply version with even more type annotations
 meta def sexp_of_expr : (option ℕ) → expr → tactic (sexp string) := λ fuel ex, do {
   match fuel with
   | none := pure ()
