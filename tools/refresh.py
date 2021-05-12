@@ -31,7 +31,7 @@ print()
 print("================================")
 print("Configure and build lean project")
 print("================================")
-os.system('leanproject build')
+os.system("leanproject build")
 
 # copy lean files
 print()
@@ -40,25 +40,21 @@ print("Copy base lean library to _target/deps/lean/library")
 print("===================================================")
 #   get path from lean
 print("Getting lean paths.")
-with subprocess.Popen(
-    ['lean', '--path'], 
-    stdout=subprocess.PIPE, 
-    stderr=subprocess.STDOUT
-) as out:
+with subprocess.Popen(["lean", "--path"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as out:
     stdout, stderr = out.communicate()
 assert stderr is None, stderr
 s = stdout.decode("utf-8")
 d = json.loads(s)
 lean_library = None
-for p in d['path']:
+for p in d["path"]:
     if p.endswith("lean/library"):
         lean_library = Path(p)
         break
 assert lean_library is not None
 print("Found lean library path: ", lean_library)
 print("Copying lean libary to _target/deps/lean/library ...")
-(_target/"deps"/"lean").mkdir()
-shutil.copytree(lean_library, _target/"deps"/"lean"/"library")
+(_target / "deps" / "lean").mkdir()
+shutil.copytree(lean_library, _target / "deps" / "lean" / "library")
 
 # change leanpkg.path
 print("")
@@ -69,7 +65,7 @@ path_file = Path("leanpkg.path")
 lines = []
 with open(path_file, "r") as f:
     for line in f:
-        lines.append(line.replace('builtin_path', "path _target/deps/lean/library"))
+        lines.append(line.replace("builtin_path", "path _target/deps/lean/library"))
 with open(path_file, "w") as f:
     f.writelines(lines)
 print("Path changed")
