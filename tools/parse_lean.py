@@ -238,7 +238,14 @@ class LeanParser:
     current_token: Token
     parameter_positions: Dict[Tuple[int, int], List[Tuple[int, int]]]
     tactic_block_positions: Set[Tuple[int, int]]
-    def __init__(self, lean_file: LeanFile, line: int, column: int, parameter_positions=None, tactic_block_positions=None):
+    def __init__(
+            self,
+            lean_file: LeanFile,
+            line: int,
+            column: int,
+            parameter_positions=None,
+            tactic_block_positions=None,
+    ):
         """
         Start parser on this file and this position
         """
@@ -943,6 +950,7 @@ class LeanParser:
             elif self.is_token(right):
                 break
             else:
+
                 self.raise_error(f'Expected "," or "{right}"')
         self.read_token(right)
         self.consume_space()

@@ -50,7 +50,7 @@ meta def trace_data_bool (table : string) (key : string) (field : string) (bool_
 /-- Each tactic application within a given file can be keyed by four
 numbers.  Combinators allow a tactic to be called more than once, and
 some nested tactics use the same line and column position, so
-we also include depth to capture nesting and index to capture exectuted
+we also include depth to capture nesting and index to capture executed
 order.  (A proof can be uniquely keyed by its first tactic 
 at depth 1, index 1.) -/
 structure tactic_address :=
@@ -136,20 +136,42 @@ trace_data_string "tactic_state" ts_key "open_namespaces" (string.intercalate " 
 goals <- tactic.get_goals,
 trace_data_num "tactic_state" ts_key "goal_count" goals.length,
 
--- individual goal information
-goals.enum.mmap' $ λ ⟨n, g⟩, (do
-  let g_key := ts_key ++ ":" ++ (repr n),
+  let dump_all_goals : tactic unit := do {
+  -- dump entire goal stack as a single goal
+  (tactic_state_strings : list string) ← goals.mmap $ λ g, do {
+    saved_ts ← tactic.read,
+    tactic.set_goals [g],
+    ts ← tactic.read,
+    result ← PRINT_TACTIC_STATE ts,
+    set_state saved_ts,
+    pure result
+  },
+
+  let g_key := ts_key ++ ":0",
   trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
-  trace_data_num "tactic_state_goal" g_key "ix" n,
-  -- store hash of goal metavariable to know if goal changed
-  trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
-  -- pretty print the goal by temporarily making it the only goal
-  saved_ts <- tactic.read, -- copy tactic state
-  tactic.set_goals [g],
-  ts <- tactic.read, -- temporary tactic state
-  trace_data_string "tactic_state_goal" g_key "goal_pp" ts.to_format.to_string,
-  set_state saved_ts -- put tactic state back to way it was
-),
+  trace_data_num "tactic_state_goal" g_key "ix" 0,
+  trace_data_num "tactic_state_goal" g_key "goal_hash" ((goals.map expr.hash).foldr (+) 0),
+  trace_data_string "tactic_state_goal" g_key "goal_pp" ("\n\n".intercalate tactic_state_strings)
+},
+
+dump_all_goals,
+
+-- -- individual goal information
+-- goals.enum.mmap' $ λ ⟨n, g⟩, (do
+--   let g_key := ts_key ++ ":" ++ (repr n),
+--   trace_data_string "tactic_state_goal" g_key "tactic_state" ts_key,
+--   trace_data_num "tactic_state_goal" g_key "ix" n,
+--   -- store hash of goal metavariable to know if goal changed
+--   trace_data_num "tactic_state_goal" g_key "goal_hash" g.hash,
+--   -- pretty print the goal by temporarily making it the only goal
+--   saved_ts <- tactic.read, -- copy tactic state
+--   tactic.set_goals [g],
+--   ts <- tactic.read, -- temporary tactic state
+--   (printed_tactic_state : string) ← PRINT_TACTIC_STATE ts,
+--   trace_data_string "tactic_state_goal" g_key "goal_pp" printed_tactic_state,
+--   set_state saved_ts -- put tactic state back to way it was
+-- ),
+
 return ()
 -- END CUSTOMIZABLE CODE
 
