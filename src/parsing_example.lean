@@ -43,7 +43,7 @@ set_option pp.all true
 #check interactive.parse $ parser.pr_parser $ interactive.types.texpr
 #check interactive.parse $ parser.my_itactic
 #check interactive.parse $ lean.parser.itactic
-#check interactive.parse $ parser.pr_parser $ lean.parser.itactic
+-- #check interactive.parse $ parser.pr_parser $ lean.parser.itactic
 #check @lean.parser.reflectable.cast (tactic.{0} unit) lean.parser.itactic_reflected
 example : true := begin
     my_try { my_apply true.intro },
