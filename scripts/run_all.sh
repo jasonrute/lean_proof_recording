@@ -17,9 +17,9 @@ lean --make src/empty.lean
 bash _target/deps/mathlib/scripts/mk_all.sh
 mkdir "$DATA_DIR"
 
-# python tools/run_lean_and_save_results.py _target/deps/mathlib/src/category_theory/currying.lean "$DATA_DIR"
-# python3 tools/run_lean_and_save_results.py src/empty.lean "$DATA_DIR"
-python3 tools/run_lean_and_save_results.py _target/deps/mathlib/src/all.lean "$DATA_DIR"
+# python3 -m lean_proof_recording.pipeline.run_lean_and_save_results.py _target/deps/mathlib/src/category_theory/currying.lean "$DATA_DIR"
+# python3 -m lean_proof_recording.pipeline.run_lean_and_save_results.py src/empty.lean "$DATA_DIR"
+python3 -m lean_proof_recording.pipeline.run_lean_and_save_results.py _target/deps/mathlib/src/all.lean "$DATA_DIR"
 
 python3 tools/extract_trace_data.py "$DATA_DIR"
 python3 tools/extract_proof_data.py "$DATA_DIR"
