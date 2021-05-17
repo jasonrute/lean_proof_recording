@@ -103,12 +103,14 @@ def main():
     # load previously extracted data
     print("[extract_training_test_data] LOADING PREVIOUSLY EXTRACTED DATA")
     tactic_state_goal = pd.read_json(
-        data_dir / RAW_TRACED_DATA_DIR / "tactic_state_goal.json", orient="records"
+        data_dir / RAW_TRACED_DATA_DIR / "tactic_state_goal.jsonl", orient="records", lines=True,
     )
     tactic_state = pd.read_json(
-        data_dir / RAW_TRACED_DATA_DIR / "tactic_state.json", orient="records"
+        data_dir / RAW_TRACED_DATA_DIR / "tactic_state.jsonl", orient="records", lines=True,
     )
-    tactics = pd.read_json(data_dir / EXTRACTED_PROOF_DATA_DIR / "tactics.json", orient="records")
+    tactics = pd.read_json(
+        data_dir / EXTRACTED_PROOF_DATA_DIR / "tactics.jsonl", orient="records", lines=True
+    )
 
     # process
     print("[extract_training_test_data] PROCESSING TO FULL DATA")

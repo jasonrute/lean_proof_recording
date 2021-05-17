@@ -1,20 +1,21 @@
-from io import TextIOWrapper
-from typing import Any, Dict, List, Tuple
-from pprint import pprint
 import sys
 import json
+import jsonlines
+from io import TextIOWrapper
 from pathlib import Path
+from pprint import pprint
+from typing import Any, Dict, List, Tuple
 
 # the Lean messages are returned as JSON dictionaries
 LeanMessage = Dict[str, Any]
 
-# we will store data in "DataTables", which are lists of json dictionaries
-# the dictionary keys form the columns of the tabular data.
+# we will store data in "DataTables", which are lists of json dictionaries. The dictionary keys
+# form the columns of the tabular data.
 TableRow = Dict[str, Any]
 DataTable = List[TableRow]
 
 
-def seperate_lean_messages(
+def separate_lean_messages(
     stdout_file: TextIOWrapper,
 ) -> Tuple[List[LeanMessage], List[LeanMessage]]:
     trace_blocks = []
@@ -40,7 +41,7 @@ def read_path_map(data_dir: Path) -> Dict[Path, Path]:
 
 def read_lean_messages(data_dir: Path) -> Tuple[List[LeanMessage], List[LeanMessage]]:
     with open(data_dir / "lean_stdout.log", "r") as f:
-        return seperate_lean_messages(f)
+        return separate_lean_messages(f)
 
 
 def relative_path(path_map: Dict[Path, Path], filename: Path):
@@ -87,8 +88,9 @@ def extract_data_tables(
 
 
 def save_other_lean_messages(messages: List[LeanMessage], data_dir: Path):
-    with open(data_dir / "lean_errors.json", "w") as outfile:
-        json.dump(messages, outfile, indent=4)
+    with jsonlines.open(data_dir / "lean_errors.jsonl", "w") as outfile:
+        for msg in messages:
+            outfile.write(msg)
 
 
 def save_data_tables(data_tables: Dict[str, DataTable], data_dir: Path):
@@ -96,9 +98,10 @@ def save_data_tables(data_tables: Dict[str, DataTable], data_dir: Path):
     dir.mkdir()
     for table_name, table in data_tables.items():
         # save each table to a file
-        filename = table_name + ".json"
-        with open(dir / filename, "w") as outfile:
-            json.dump(table, outfile)
+        filename = table_name + ".jsonl"
+        with jsonlines.open(dir / filename, "w") as outfile:
+            for record in table:
+                outfile.write(record)
 
 
 def extract_data(data_dir: Path) -> None:
