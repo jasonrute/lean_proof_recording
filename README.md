@@ -76,14 +76,14 @@ python3 -m lean_proof_recording.pipeline.extract_trace_data <path/to/data/direct
 
 This will add the following to the data directory:
 
-* `lean_errors.json` This includes all Lean messages from the run which are not informational
+* `lean_errors.jsonl` This includes all Lean messages from the run which are not informational
   traces. This includes any Lean compiliation errors. Check that there are no messages.
 * `raw_traced_data` This is a collection of relational tables containing the traced data (along with
   the filename and position of the trace). You can load the files into a `pandas` dataframe as
-follows:
+  follows:
 
 ```python
-pd.read_json("path/to/file.json", orient="records")
+pd.read_json("path/to/file.jsonl", orient="records", lines=True)
 ````
 
 (Further cleaning may be neccessary to properly handle missing values.) Each row (within a table) is
@@ -98,18 +98,18 @@ python3 -m lean_proof_recording.pipeline.extract_proof_data <path/to/data/direct
 ```
 
 This script will add a directory `extacted_proof_data` to the data directory. It contains the
-following `json` files:
+following `jsonl` files:
 
-* `proof_trees.json` This includes JSON ASTs for a every proof. (Note, this doesn't include term
+* `proof_trees.jsonl` This includes JSON ASTs for every proof. (Note, this doesn't include term
   proofs, and for various reasons a Lean theorem can be have multiple associated proofs. Roughly
   speaking, but with some exceptions, a tactic proof is one which is started by the `by` or `begin`
   keywords.)
-* `proof.json` A 2D table of data for each proof. Use the `key` column to relate to the other data
+* `proof.jsonl` A 2D table of data for each proof. Use the `key` column to relate to the other data
   structures.
-* `tactic.json` A 2D table of data for each tactic command. Use the `key` column to relate to the
+* `tactic.jsonl` A 2D table of data for each tactic command. Use the `key` column to relate to the
   other data structures.
-* `args.json` A 2D table of data for each tactic command argument. Use the `key` column to relate to
-  the other data structures.
+* `args.jsonl` A 2D table of data for each tactic command argument. Use the `key` column to relate
+  to the other data structures.
 
 ## Putting it all together
 
