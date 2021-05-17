@@ -506,14 +506,14 @@ class ProofExtractor:
 
 
 _TACTIC_INSTANCE_DATA = None
-_TACITC_PARAMS_POS_DATA = None
+_TACTIC_PARAMS_POS_DATA = None
 _DATA_DIR = None
 
 
 def process_path(relative_file_path):
     global _DATA_DIR
     global _TACTIC_INSTANCE_DATA
-    global _TACITC_PARAMS_POS_DATA
+    global _TACTIC_PARAMS_POS_DATA
 
     file_path = Path(_DATA_DIR) / "lean_files" / relative_file_path
     print(file_path)
@@ -524,7 +524,7 @@ def process_path(relative_file_path):
             row for row in _TACTIC_INSTANCE_DATA if row["filename"] == relative_file_path
         ]
         file_tactic_params_pos_data = [
-            row for row in _TACITC_PARAMS_POS_DATA if row["filename"] == relative_file_path
+            row for row in _TACTIC_PARAMS_POS_DATA if row["filename"] == relative_file_path
         ]
 
         proof_extractor = ProofExtractor(
@@ -549,7 +549,7 @@ def process_path(relative_file_path):
 def main():
     global _DATA_DIR
     global _TACTIC_INSTANCE_DATA
-    global _TACITC_PARAMS_POS_DATA
+    global _TACTIC_PARAMS_POS_DATA
 
     assert len(sys.argv) == 2
     _DATA_DIR = Path(sys.argv[1])
@@ -559,7 +559,7 @@ def main():
     data_tables = collections.defaultdict(list)
 
     _TACTIC_INSTANCE_DATA = get_traced_data(_DATA_DIR, "tactic_instances")
-    _TACITC_PARAMS_POS_DATA = get_traced_data(_DATA_DIR, "tactic_param_pos")
+    _TACTIC_PARAMS_POS_DATA = get_traced_data(_DATA_DIR, "tactic_param_pos")
 
     files = sorted({row["filename"] for row in _TACTIC_INSTANCE_DATA})
 
