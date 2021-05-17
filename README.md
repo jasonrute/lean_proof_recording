@@ -1,6 +1,6 @@
-# Tools for proof recording in Lean 3
+# Proof recording in Lean 3
 
-## Prereqs
+## Prerequesites
 
 Have `elan` and `leanproject` installed. The scripts require Python 3.7+.
 
@@ -67,8 +67,6 @@ structure.
   is empty.
 
 ### Extract data
-
-All remaining steps only need the python scripts in the `pipeline` directory and the data above.
 
 Run this command to extract the traced data into a series of tables.
 
