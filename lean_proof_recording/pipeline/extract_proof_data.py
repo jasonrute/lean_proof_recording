@@ -1,6 +1,7 @@
 import sys
 import traceback
 import collections
+import concurrent.futures
 import jsonlines
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple, Union
@@ -504,49 +505,79 @@ class ProofExtractor:
                 traceback.print_exc()
 
 
+_TACTIC_INSTANCE_DATA = None
+_TACITC_PARAMS_POS_DATA = None
+_DATA_DIR = None
+
+
+def process_path(relative_file_path):
+    global _DATA_DIR
+    global _TACTIC_INSTANCE_DATA
+    global _TACITC_PARAMS_POS_DATA
+
+    file_path = Path(_DATA_DIR) / "lean_files" / relative_file_path
+    print(file_path)
+    try:
+        lean_file = LeanFile(str(file_path))
+
+        file_tactic_instance_data = [
+            row for row in _TACTIC_INSTANCE_DATA if row["filename"] == relative_file_path
+        ]
+        file_tactic_params_pos_data = [
+            row for row in _TACITC_PARAMS_POS_DATA if row["filename"] == relative_file_path
+        ]
+
+        proof_extractor = ProofExtractor(
+            lean_file=lean_file,
+            relative_file_path=relative_file_path,
+            tactic_instance_data=file_tactic_instance_data,
+            tactic_params_pos_data=file_tactic_params_pos_data,
+        )
+        proof_extractor.run()
+
+        return (
+            proof_extractor.proof_trees,
+            proof_extractor.proof_table,
+            proof_extractor.tactic_table,
+            proof_extractor.arg_table,
+        )
+    except Exception:
+        print(file_path)
+        traceback.print_exc()
+
+
 def main():
+    global _DATA_DIR
+    global _TACTIC_INSTANCE_DATA
+    global _TACITC_PARAMS_POS_DATA
+
     assert len(sys.argv) == 2
-    data_dir = Path(sys.argv[1])
-    assert data_dir.exists(), data_dir
-    assert data_dir.is_dir(), data_dir
+    _DATA_DIR = Path(sys.argv[1])
+    assert _DATA_DIR.exists(), _DATA_DIR
+    assert _DATA_DIR.is_dir(), _DATA_DIR
 
     data_tables = collections.defaultdict(list)
 
-    tactic_instance_data = get_traced_data(data_dir, "tactic_instances")
-    tactic_params_pos_data = get_traced_data(data_dir, "tactic_param_pos")
+    _TACTIC_INSTANCE_DATA = get_traced_data(_DATA_DIR, "tactic_instances")
+    _TACITC_PARAMS_POS_DATA = get_traced_data(_DATA_DIR, "tactic_param_pos")
 
-    files = sorted({row["filename"] for row in tactic_instance_data})
-    for relative_file_path in files:
-        file_path = Path(data_dir) / "lean_files" / relative_file_path
-        print(file_path)
-        try:
-            lean_file = LeanFile(str(file_path))
+    files = sorted({row["filename"] for row in _TACTIC_INSTANCE_DATA})
 
-            file_tactic_instance_data = [
-                row for row in tactic_instance_data if row["filename"] == relative_file_path
-            ]
-            file_tactic_params_pos_data = [
-                row for row in tactic_params_pos_data if row["filename"] == relative_file_path
-            ]
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        future_to_path = {executor.submit(process_path, path): path for path in files}
+        for future in concurrent.futures.as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                (proof_trees, proof_table, tactic_table, arg_table) = future.result()
+            except Exception as exc:
+                print("%r generated an exception: %s" % (path, exc))
+            else:
+                data_tables["proof_trees"].extend(proof_trees)
+                data_tables["proofs"].extend(proof_table)
+                data_tables["tactics"].extend(tactic_table)
+                data_tables["args"].extend(arg_table)
 
-            proof_extractor = ProofExtractor(
-                lean_file=lean_file,
-                relative_file_path=relative_file_path,
-                tactic_instance_data=file_tactic_instance_data,
-                tactic_params_pos_data=file_tactic_params_pos_data,
-            )
-            proof_extractor.run()
-
-            data_tables["proof_trees"].extend(proof_extractor.proof_trees)
-            data_tables["proofs"].extend(proof_extractor.proof_table)
-            data_tables["tactics"].extend(proof_extractor.tactic_table)
-            data_tables["args"].extend(proof_extractor.arg_table)
-
-        except Exception:
-            print(file_path)
-            traceback.print_exc()
-
-    save_data_tables(data_tables, data_dir)
+    save_data_tables(data_tables, _DATA_DIR)
 
 
 if __name__ == "__main__":
