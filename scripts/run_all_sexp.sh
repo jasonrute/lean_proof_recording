@@ -21,6 +21,6 @@ mkdir "$DATA_DIR"
 # python3 -m lean_proof_recording.pipeline.run_lean_and_save_results src/empty.lean "$DATA_DIR"
 python3 -m lean_proof_recording.pipeline.run_lean_and_save_results _target/deps/mathlib/src/all.lean "$DATA_DIR"
 
-python3 lean_proof_recording.pipeline.extract_trace_data "$DATA_DIR"
-python3 lean_proof_recording.pipeline.extract_proof_data "$DATA_DIR"
-python3 lean_proof_recording.pipeline.extract_training_testing_data "$DATA_DIR" --sexp
+python3 -m lean_proof_recording.pipeline.extract_trace_data "$DATA_DIR"
+python3 -m lean_proof_recording.pipeline.extract_proof_data "$DATA_DIR"
+python3 -m lean_proof_recording.pipeline.extract_training_testing_data "$DATA_DIR" --sexp

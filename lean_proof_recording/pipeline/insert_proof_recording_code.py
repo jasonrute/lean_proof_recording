@@ -288,9 +288,11 @@ class ModifyInterativeParameters:
             monad_type = type_string.split()[0]
         else:
             print()
-            print("Warning : This definition has no signature type, which is ambiguous.")
-            print("Since it has interactive parameters, we will assume")
-            print("it is of type tactic unit.")
+            print(
+                "Warning : This definition has no signature type, which is ambiguous. "
+                + "Since it has interactive parameters, we will assume "
+                + "it is of type tactic unit."
+            )
             print(lean_file.slice_string(ast.line, 0, ast.end_line, ast.end_column))
             print()
             type_string = None
@@ -303,16 +305,20 @@ class ModifyInterativeParameters:
 
         if monad_type == "itactic":
             print()
-            print("Warning: This definition has type itactic, which is ambiguous.")
-            print("Since it has interactive parameters, we will assume")
-            print("it is of type tactic unit.")
+            print(
+                "Warning : This definition has type itactic, which is ambiguous. "
+                + "Since it has interactive parameters, we will assume "
+                + "it is of type tactic unit."
+            )
             print(lean_file.slice_string(ast.line, 0, ast.end_line, ast.end_column))
             print()
             monad_type = "tactic"
 
         if monad_type not in ["conv", "tactic"]:
-            print(f"Warning: This definition has an unknown type: {type_string}.")
-            print(f"Warning: We will not modify it.")
+            print(
+                f"Warning: This definition has an unknown type: {type_string}. "
+                + "We will not modify it."
+            )
             print(lean_file.slice_string(ast.line, 0, ast.end_line, ast.end_column))
             print()
             return None
