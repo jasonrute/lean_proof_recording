@@ -109,7 +109,7 @@ def extract_data(data_dir: Path) -> None:
     trace_messages, other_messages = read_lean_messages(data_dir)
 
     for m in other_messages:
-        print("Unexseparateean output message:")
+        print("Unexpected lean output message:")
         pprint(m)
 
     save_other_lean_messages(other_messages, data_dir)
