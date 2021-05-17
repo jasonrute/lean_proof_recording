@@ -1,8 +1,8 @@
-import collections
-import json
-from pathlib import Path
 import sys
 import traceback
+import collections
+import jsonlines
+from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple, Union
 
 from lean_proof_recording.parser import AST, LeanParser
@@ -10,8 +10,11 @@ from lean_proof_recording.tokenizer import LeanFile, TokenType
 
 
 def get_traced_data(data_dir: Path, table: str) -> List[Dict[str, Any]]:
-    with open(data_dir / "raw_traced_data" / (table + ".json"), "r") as f:
-        return json.load(f)
+    data = []
+    with jsonlines.open(data_dir / "raw_traced_data" / (table + ".jsonl"), "r") as r:
+        for d in r:
+            data.append(d)
+    return data
 
 
 def save_data_tables(data_tables: Dict[str, List[Dict[str, Any]]], data_dir: Path):
@@ -19,9 +22,10 @@ def save_data_tables(data_tables: Dict[str, List[Dict[str, Any]]], data_dir: Pat
     dir.mkdir(exist_ok=True)
     for table_name, table in data_tables.items():
         # save each table to a file
-        filename = table_name + ".json"
-        with open(dir / filename, "w") as outfile:
-            json.dump(table, outfile, indent=2)
+        filename = table_name + ".jsonl"
+        with jsonlines.open(dir / filename, "w") as outfile:
+            for record in table:
+                outfile.write(record)
 
 
 class ProofExtractor:
