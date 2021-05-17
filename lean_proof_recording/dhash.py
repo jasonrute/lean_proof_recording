@@ -36,6 +36,10 @@ def _parse_main():
     return parser.parse_args()
 
 
+def float_in_unit_interval(x):
+    return 0 <= x and x <= 1
+
+
 def _main(decls_file: str, valid_frac: float, test_frac: float, dest_dir: str):
     valid_frac = 0.01 * valid_frac
     test_frac = 0.01 * test_frac
@@ -45,7 +49,6 @@ def _main(decls_file: str, valid_frac: float, test_frac: float, dest_dir: str):
     train_threshold = 1.0 - valid_frac - test_frac
     valid_threshold = 1.0 - test_frac
     print(f"TRAIN THRESHOLD: {train_threshold} VALID_THRESHOLD: {valid_threshold}")
-    float_in_unit_interval = lambda x: 0 <= x and x <= 1
     assert float_in_unit_interval(train_threshold) and float_in_unit_interval(valid_threshold)
     for decl in decls:
         dataset[get_split(decl, train_threshold, valid_threshold)].append(decl)
