@@ -84,29 +84,6 @@ def run_lean_make(filename: Path, out_directory: Path):
             assert rc >= 0, f"lean --make returned non-zero return code {rc}"
 
 
-# def parse_stdout(stdout):
-#     print("parsing output")
-#     info_blocks = []
-#     for line in stdout:
-#         if line:
-#             s = line.decode("utf-8")
-#             d = json.loads(s)
-#             if d['severity'] == 'information' and d['caption'] == "trace output":
-#                 info_blocks.append(d)
-#             else:
-#                 print("Unexpected output:")
-#                 pprint(d)
-
-#     return info_blocks
-
-# def save_traced_data(info_blocks, out_directory: Path):
-#     print("saving traced data")
-#     with open(out_directory+"output.json", 'w') as f:
-#         for info in info_blocks:
-#             s = json.dumps(info) + "\n"
-#             f.write(s)
-
-
 def run_lean_file_and_save_output(lean_file: Path, out_directory: Path):
     assert lean_file.exists(), lean_file
     assert lean_file.is_file(), lean_file

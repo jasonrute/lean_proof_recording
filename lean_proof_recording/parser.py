@@ -1,31 +1,105 @@
 import dataclasses
 import json
 from pathlib import Path
-from pprint import pprint
 import sys
 import traceback
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple, Union
 
-from tokenize_lean_files import LeanFile, Token, TokenType
+from lean_proof_recording.tokenizer import LeanFile, Token, TokenType
 
-COMMANDS = {"theorem", "axiom", "axioms", "variable", "protected", "private", "hide",
-         "definition", "meta", "mutual", "example", "noncomputable", "abbreviation",
-         "variables", "parameter", "parameters", "constant", "constants",
-         "using_well_founded", "[whnf]",
-         "end", "namespace", "section", "prelude",
-         "import", "inductive", "coinductive", "structure", "class", "universe", "universes", "local",
-         "precedence", "reserve", "infixl", "infixr", "infix", "postfix", "prefix", "notation",
-         "set_option", "open", "export", "@[",
-         "attribute", "instance", "include", "omit", "init_quotient",
-         "declare_trace", "add_key_equivalence",
-         "run_cmd", "#check", "#reduce", "#eval", "#print", "#help", "#exit",
-         "#compile", "#unify", "lemma", "def", "alias", "open_locale", "add_decl_doc",
-         "library_note", "localized", "add_hint_tactic"
+COMMANDS = {
+    "theorem",
+    "axiom",
+    "axioms",
+    "variable",
+    "protected",
+    "private",
+    "hide",
+    "definition",
+    "meta",
+    "mutual",
+    "example",
+    "noncomputable",
+    "abbreviation",
+    "variables",
+    "parameter",
+    "parameters",
+    "constant",
+    "constants",
+    "using_well_founded",
+    "[whnf]",
+    "end",
+    "namespace",
+    "section",
+    "prelude",
+    "import",
+    "inductive",
+    "coinductive",
+    "structure",
+    "class",
+    "universe",
+    "universes",
+    "local",
+    "precedence",
+    "reserve",
+    "infixl",
+    "infixr",
+    "infix",
+    "postfix",
+    "prefix",
+    "notation",
+    "set_option",
+    "open",
+    "export",
+    "@[",
+    "attribute",
+    "instance",
+    "include",
+    "omit",
+    "init_quotient",
+    "declare_trace",
+    "add_key_equivalence",
+    "run_cmd",
+    "#check",
+    "#reduce",
+    "#eval",
+    "#print",
+    "#help",
+    "#exit",
+    "#compile",
+    "#unify",
+    "lemma",
+    "def",
+    "alias",
+    "open_locale",
+    "add_decl_doc",
+    "library_note",
+    "localized",
+    "add_hint_tactic",
 }
 
-ARROWS = {'->', '→'}
-BINDERS = {'assume', 'Pi', 'forall', '∀', 'Π', 'Σ', '∑', '∏', 'exists', '∃', 'λ', 'fun', '⨆', '⋂', '⋃', '∫', '∫⁻', '⨁'}
-BRACKETS = {'{': '}', '(': ')', '[': ']', '⟨': '⟩', '⟪': '⟫', '⟮': '⟯', '`[': ']'}
+ARROWS = {"->", "→"}
+BINDERS = {
+    "assume",
+    "Pi",
+    "forall",
+    "∀",
+    "Π",
+    "Σ",
+    "∑",
+    "∏",
+    "exists",
+    "∃",
+    "λ",
+    "fun",
+    "⨆",
+    "⋂",
+    "⋃",
+    "∫",
+    "∫⁻",
+    "⨁",
+}
+BRACKETS = {"{": "}", "(": ")", "[": "]", "⟨": "⟩", "⟪": "⟫", "⟮": "⟯", "`[": "]"}
 LEFT_BRACKETS = set(BRACKETS.keys())
 RIGHT_BRACKETS = set(BRACKETS.values())
 
@@ -35,15 +109,18 @@ def next_token(lean_file: LeanFile, token: Token):
     for t in lean_file.iter_tokens_right(token.line, token.end_column):
         return t
 
+
 def prev_token(lean_file: LeanFile, token: Token):
     for t in lean_file.iter_tokens_left(token.line, token.column):
         return t
+
 
 def search_right(lean_file: LeanFile, start: Token, targets: List[str]):
     for t in lean_file.iter_tokens_right(start.line, start.column):
         if t.string in targets:
             return t
     return None
+
 
 def search_left(lean_file: LeanFile, start: Token, targets: List[str]):
     for t in lean_file.iter_tokens_left(start.line, start.column):
@@ -75,51 +152,51 @@ class AST:
     @dataclasses.dataclass
     class BoundExprPart(ExprPart):
         binder: str
-        bound_part: 'AST.Expr'
-        expr: 'AST.Expr'
+        bound_part: "AST.Expr"
+        expr: "AST.Expr"
 
     @dataclasses.dataclass
     class BracketExprPart(ExprPart):
         brackets: Tuple[str, str]
-        exprs: List['AST.Expr']
+        exprs: List["AST.Expr"]
 
     @dataclasses.dataclass
     class ITEExprPart(ExprPart):
-        if_expr: 'AST.Expr'
-        then_expr: 'AST.Expr'
-        else_expr: 'AST.Expr'
+        if_expr: "AST.Expr"
+        then_expr: "AST.Expr"
+        else_expr: "AST.Expr"
 
     @dataclasses.dataclass
     class LetExprPart(ExprPart):
-        var: 'AST.Expr'
-        expr: 'AST.Expr'
-        body: 'AST.Expr'
+        var: "AST.Expr"
+        expr: "AST.Expr"
+        body: "AST.Expr"
 
     @dataclasses.dataclass
     class MatchCase(ASTData):
-        pattern: 'AST.Expr'
-        expr: 'AST.Expr'
+        pattern: "AST.Expr"
+        expr: "AST.Expr"
 
     @dataclasses.dataclass
     class MatchExprPart(ExprPart):
-        match_expr: 'AST.Expr'
-        cases: List['AST.MatchCase']
+        match_expr: "AST.Expr"
+        cases: List["AST.MatchCase"]
 
     @dataclasses.dataclass
     class BeginExprPart(ExprPart):
-        proof: 'AST.BeginProof'
+        proof: "AST.BeginProof"
 
     @dataclasses.dataclass
     class CalcExprPart(ExprPart):
-        parts: List['AST.Expr']
+        parts: List["AST.Expr"]
 
     @dataclasses.dataclass
     class DoExprPart(ExprPart):
-        parts: List['AST.Expr']
+        parts: List["AST.Expr"]
 
     @dataclasses.dataclass
     class ByExprPart(ExprPart):
-        proof: 'AST.ByProof'
+        proof: "AST.ByProof"
 
     @dataclasses.dataclass
     class TokenExprPart(ExprPart):
@@ -127,34 +204,34 @@ class AST:
 
     @dataclasses.dataclass
     class Expr(ASTData):
-        expr_parts: List['AST.ExprPart']
+        expr_parts: List["AST.ExprPart"]
 
     @dataclasses.dataclass
     class ParamBlock(ASTData):
         brackets: Tuple[str, str]
-        vars: Optional['AST.Expr']
-        type_expr: 'AST.Expr'
-        default_expr: Optional['AST.Expr']
+        vars: Optional["AST.Expr"]
+        type_expr: "AST.Expr"
+        default_expr: Optional["AST.Expr"]
 
     @dataclasses.dataclass
     class SignatureType(ASTData):
-        arg_types: List['AST.Expr']
-        result_type: 'AST.Expr'
+        arg_types: List["AST.Expr"]
+        result_type: "AST.Expr"
 
     @dataclasses.dataclass
     class Signature(ASTData):
-        params: List['AST.ParamBlock']
-        signature_type: Optional['AST.SignatureType']
+        params: List["AST.ParamBlock"]
+        signature_type: Optional["AST.SignatureType"]
 
     @dataclasses.dataclass
     class Body(ASTData):
-        expr: 'AST.Expr'
+        expr: "AST.Expr"
 
     @dataclasses.dataclass
     class DefLike(ASTData):
-        univ: Optional['AST.Univs']
-        name: 'AST.Name'
-        signature: 'AST.Signature'
+        univ: Optional["AST.Univs"]
+        name: "AST.Name"
+        signature: "AST.Signature"
         # body: 'AST.Body'
 
     @dataclasses.dataclass
@@ -167,7 +244,7 @@ class AST:
 
     @dataclasses.dataclass
     class ITacticTacticParam(TacticParam):
-        tactic: 'AST.ITactic'
+        tactic: "AST.ITactic"
 
     @dataclasses.dataclass
     class Tactic(ASTData):
@@ -175,8 +252,8 @@ class AST:
 
     @dataclasses.dataclass
     class NamedTactic(Tactic):
-        tactic_name: 'AST.Name'
-        args: List['AST.TacticParam']
+        tactic_name: "AST.Name"
+        args: List["AST.TacticParam"]
 
     @dataclasses.dataclass
     class CalcTactic(Tactic):
@@ -184,16 +261,16 @@ class AST:
 
     @dataclasses.dataclass
     class Solve1Tactic(Tactic):
-        tactics: List['AST.Tactic']
+        tactics: List["AST.Tactic"]
 
     @dataclasses.dataclass
     class ITactic(Tactic):
-        tactics: List['AST.Tactic']
+        tactics: List["AST.Tactic"]
 
     @dataclasses.dataclass
     class SemicolonTactic(Tactic):
-        tactic1: 'AST.Tactic'
-        tactic2: 'AST.Tactic'
+        tactic1: "AST.Tactic"
+        tactic2: "AST.Tactic"
         first_semicolon_line: int
         first_semicolon_column: int
         semicolon_line: int
@@ -202,8 +279,8 @@ class AST:
 
     @dataclasses.dataclass
     class SemicolonListTactic(Tactic):
-        tactic1: 'AST.Tactic'
-        tactic_list: List['AST.Tactic']
+        tactic1: "AST.Tactic"
+        tactic_list: List["AST.Tactic"]
         first_semicolon_line: int
         first_semicolon_column: int
         semicolon_line: int
@@ -212,39 +289,41 @@ class AST:
 
     @dataclasses.dataclass
     class AlternativeTactic(Tactic):
-        tactic1: 'AST.Tactic'
-        tactic2: 'AST.Tactic'
+        tactic1: "AST.Tactic"
+        tactic2: "AST.Tactic"
         alternative_line: int
         alternative_column: int
 
     @dataclasses.dataclass
     class ByProof(ASTData):
-        tactic: 'AST.Tactic'
+        tactic: "AST.Tactic"
 
     @dataclasses.dataclass
     class BeginProof(ASTData):
-        tactics: List['AST.Tactic']
-    
+        tactics: List["AST.Tactic"]
+
     @dataclasses.dataclass
     class BracketProof(ASTData):
-        tactics: List['AST.Tactic']
+        tactics: List["AST.Tactic"]
+
 
 class LeanParser:
     lean_file: LeanFile
-    token_lines : List[List[Token]]
-    line : int
+    token_lines: List[List[Token]]
+    line: int
     column: int
     pos: int
     current_token: Token
     parameter_positions: Dict[Tuple[int, int], List[Tuple[int, int]]]
     tactic_block_positions: Set[Tuple[int, int]]
+
     def __init__(
-            self,
-            lean_file: LeanFile,
-            line: int,
-            column: int,
-            parameter_positions=None,
-            tactic_block_positions=None,
+        self,
+        lean_file: LeanFile,
+        line: int,
+        column: int,
+        parameter_positions=None,
+        tactic_block_positions=None,
     ):
         """
         Start parser on this file and this position
@@ -264,7 +343,9 @@ class LeanParser:
         self.pos = pos
         self.current_token = current
         self.parameter_positions = {} if parameter_positions is None else parameter_positions
-        self.tactic_block_positions = set() if tactic_block_positions is None else tactic_block_positions
+        self.tactic_block_positions = (
+            set() if tactic_block_positions is None else tactic_block_positions
+        )
 
     # low level parser stuff
     def peek(self) -> Token:
@@ -298,10 +379,10 @@ class LeanParser:
         line_str = "".join(t.string for t in self.token_lines[self.line])
         file_location = f"{self.lean_file.filename}:{self.line+1}:{self.column+1}"
         return f"{file_location}\n{self.line:04}: {line_str}      {' ' * self.column}{'^' * len(self.current_token.string)}"
-    
+
     def raise_error(self, msg: str):
         raise Exception(f"{msg}:\n{self.format_file_location()}")
-    
+
     # medium level parsing
     def start_pos(self) -> Tuple[int, int]:
         return (self.current_token.line, self.current_token.column)
@@ -311,13 +392,15 @@ class LeanParser:
 
     def read_next(self) -> str:
         if self.is_eof():
-            self.raise_error('Expected token but EOF')
+            self.raise_error("Expected token but EOF")
         return self.next().string
 
     def read_token(self, expected_string: str) -> str:
         t = self.next()
         if t.string != expected_string:
-            self.raise_error('Expected {} but found {}'.format(repr(expected_string), repr(t.string)))
+            self.raise_error(
+                "Expected {} but found {}".format(repr(expected_string), repr(t.string))
+            )
         return t.string
 
     def is_token(self, expected_string: str) -> bool:
@@ -327,7 +410,9 @@ class LeanParser:
     def read_token_in(self, expected_strings: Set[str]) -> str:
         t = self.next()
         if t.string not in expected_strings:
-            self.raise_error('Expected {} but found {}'.format(repr(expected_strings), repr(t.string)))
+            self.raise_error(
+                "Expected {} but found {}".format(repr(expected_strings), repr(t.string))
+            )
         return t.string
 
     def is_token_in(self, expected_strings: Set[str]) -> bool:
@@ -337,7 +422,7 @@ class LeanParser:
     def read_alphanum(self) -> str:
         t = self.next()
         if t.type != TokenType.ALPHANUMERIC:
-            self.raise_error('Expected alphanumeric but found {}'.format(repr(t.string)))
+            self.raise_error("Expected alphanumeric but found {}".format(repr(t.string)))
         return t.string
 
     def is_alphanum(self) -> bool:
@@ -345,7 +430,11 @@ class LeanParser:
         return t.type == TokenType.ALPHANUMERIC
 
     def consume_space(self):
-        while not self.is_eof() and self.peek().type in [TokenType.WHITESPACE, TokenType.LINE_COMMENT, TokenType.BLOCK_COMMENT]:
+        while not self.is_eof() and self.peek().type in [
+            TokenType.WHITESPACE,
+            TokenType.LINE_COMMENT,
+            TokenType.BLOCK_COMMENT,
+        ]:
             self.next()  # consume that token
 
     # high level parse stuff
@@ -362,19 +451,15 @@ class LeanParser:
         self.consume_space()
         end_line, end_column = self.start_pos()
         return AST.Univs(
-            univs=univs,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            univs=univs, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def read_name_part(self) -> str:
         if self.is_token("«"):
-            l = self.read_token("«")
-            n = self.read_alphanum()
-            r = self.read_token("»")
-            return l + n + r
+            ll = self.read_token("«")
+            nn = self.read_alphanum()
+            rr = self.read_token("»")
+            return ll + nn + rr
         else:
             return self.read_alphanum()
 
@@ -394,11 +479,7 @@ class LeanParser:
             name_path.append(name)
         end_line, end_column = self.start_pos()
         return AST.Name(
-            name_path=name_path,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            name_path=name_path, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def read_expr_until(self, end_tokens: Set[str]) -> AST.Expr:
@@ -426,7 +507,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # brackets {} () [], etc with comma seperators
@@ -449,7 +530,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # if then else
@@ -469,7 +550,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # let := in
@@ -489,7 +570,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # match with | := end
@@ -513,14 +594,16 @@ class LeanParser:
                     case_start = self.read_expr_until({":="})
                     case_body = self.read_expr_until({"|", "end"})
                     case_end_line, case_end_column = self.start_pos()
-                    cases.append(AST.MatchCase(
-                        pattern=case_start,
-                        expr=case_body,
-                        line=case_line,
-                        column=case_column,
-                        end_line=case_end_line,
-                        end_column=case_end_column
-                    ))
+                    cases.append(
+                        AST.MatchCase(
+                            pattern=case_start,
+                            expr=case_body,
+                            line=case_line,
+                            column=case_column,
+                            end_line=case_end_line,
+                            end_column=case_end_column,
+                        )
+                    )
                 self.read_token("end")
                 end_line, end_column = self.start_pos()
                 part = AST.MatchExprPart(
@@ -529,7 +612,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # begin end
@@ -538,11 +621,7 @@ class LeanParser:
                 proof = self.read_begin()
                 end_line, end_column = self.start_pos()
                 part = AST.BeginExprPart(
-                    proof=proof,
-                    line=line,
-                    column=column,
-                    end_line=end_line,
-                    end_column=end_column
+                    proof=proof, line=line, column=column, end_line=end_line, end_column=end_column
                 )
 
             # calc
@@ -562,7 +641,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # do
@@ -582,7 +661,7 @@ class LeanParser:
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
 
             # by
@@ -591,11 +670,7 @@ class LeanParser:
                 proof = self.read_by()
                 end_line, end_column = self.start_pos()
                 part = AST.ByExprPart(
-                    proof=proof,
-                    line=line,
-                    column=column,
-                    end_line=end_line,
-                    end_column=end_column
+                    proof=proof, line=line, column=column, end_line=end_line, end_column=end_column
                 )
 
             # unexpected token
@@ -612,11 +687,7 @@ class LeanParser:
                 s = self.read_next()
                 end_line, end_column = self.start_pos()
                 part = AST.TokenExprPart(
-                    t_string=s,
-                    line=line,
-                    column=column,
-                    end_line=end_line,
-                    end_column=end_column
+                    t_string=s, line=line, column=column, end_line=end_line, end_column=end_column
                 )
 
             expr_parts.append(part)
@@ -626,11 +697,11 @@ class LeanParser:
             line=expr_line,
             column=expr_column,
             end_line=expr_end_line,
-            end_column=expr_end_column
+            end_column=expr_end_column,
         )
 
     def read_parameter_block(self) -> AST.ParamBlock:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         left_bracket = self.read_token_in(LEFT_BRACKETS)
         right_bracket = BRACKETS[left_bracket]
         self.consume_space()
@@ -661,11 +732,11 @@ class LeanParser:
             line=line,
             column=column,
             end_line=end_line,
-            end_column=end_column
+            end_column=end_column,
         )
 
     def read_signature_type(self) -> AST.SignatureType:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         arg_types = []
         type_expr = self.read_expr_until(ARROWS | {":=", "|"})
         while self.is_token_in(ARROWS):
@@ -679,11 +750,11 @@ class LeanParser:
             line=line,
             column=column,
             end_line=end_line,
-            end_column=end_column
+            end_column=end_column,
         )
 
     def read_signature(self) -> AST.Signature:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         params = []
         while self.is_token_in(LEFT_BRACKETS):
             param = self.read_parameter_block()
@@ -702,23 +773,19 @@ class LeanParser:
             line=line,
             column=column,
             end_line=end_line,
-            end_column=end_column
+            end_column=end_column,
         )
 
     def read_body(self) -> AST.Body:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         expr = self.read_expr_until(COMMANDS)
         end_line, end_column = self.start_pos()
         return AST.Body(
-            expr=expr,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            expr=expr, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def read_def(self) -> AST.DefLike:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         self.consume_space()
         if self.is_token("{"):
             univs = self.read_univs()
@@ -728,7 +795,7 @@ class LeanParser:
         self.consume_space()
         signature = self.read_signature()
         # TODO: fix this
-        #body = self.read_body()
+        # body = self.read_body()
         end_line, end_column = self.start_pos()
         return AST.DefLike(
             univ=univs,
@@ -738,7 +805,7 @@ class LeanParser:
             line=line,
             column=column,
             end_line=end_line,
-            end_column=end_column
+            end_column=end_column,
         )
 
     def consume_matching_brackets(self) -> None:
@@ -760,98 +827,126 @@ class LeanParser:
                 self.read_next()
 
     def read_named_tactic(self) -> AST.NamedTactic:
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         tactic_name = self.read_full_name()
         self.consume_space()
         parameters = []
         visted_parameters = set()
         while True:
-            if (self.start_pos() in self.parameter_positions and self.start_pos() not in visted_parameters):
+            if (
+                self.start_pos() in self.parameter_positions
+                and self.start_pos() not in visted_parameters
+            ):
                 param_line, param_column = self.start_pos()
                 visted_parameters.add((param_line, param_column))
-                for (param_end_line, param_end_column) in self.parameter_positions[param_line, param_column]:
-                    if (param_end_line, param_end_column) > self.start_pos() and self.start_pos() in self.tactic_block_positions:
+                for (param_end_line, param_end_column) in self.parameter_positions[
+                    param_line, param_column
+                ]:
+                    if (
+                        param_end_line,
+                        param_end_column,
+                    ) > self.start_pos() and self.start_pos() in self.tactic_block_positions:
                         # this is an itactic parameter
                         itactic = self.read_itactic()
                         self.consume_space()
                         assert (param_end_line, param_end_column) == self.start_pos()
-                        parameters.append(AST.ITacticTacticParam(
-                            tactic=itactic,
-                            line=param_line,
-                            column=param_column,
-                            end_line=param_end_line,
-                            end_column=param_end_column
-                        ))
+                        parameters.append(
+                            AST.ITacticTacticParam(
+                                tactic=itactic,
+                                line=param_line,
+                                column=param_column,
+                                end_line=param_end_line,
+                                end_column=param_end_column,
+                            )
+                        )
                     else:
                         while self.start_pos() < (param_end_line, param_end_column):
                             self.read_next()
                         if self.start_pos() != (param_end_line, param_end_column):
-                            self.raise_error(f'End of parameter is in middle of a token.  Expected parameter to end at {(param_end_line, param_end_column)}')
+                            self.raise_error(
+                                f"End of parameter is in middle of a token.  Expected parameter to end at {(param_end_line, param_end_column)}"
+                            )
                         # TODO: If a tactic parameter or tactic list parameter, then zoom into tactics???
-                        parameters.append(AST.TacticParam(
-                            line=param_line,
-                            column=param_column,
-                            end_line=param_end_line,
-                            end_column=param_end_column
-                        ))
+                        parameters.append(
+                            AST.TacticParam(
+                                line=param_line,
+                                column=param_column,
+                                end_line=param_end_line,
+                                end_column=param_end_column,
+                            )
+                        )
                         self.consume_space()
-            elif (self.start_pos() in self.tactic_block_positions):
+            elif self.start_pos() in self.tactic_block_positions:
                 param_line, param_column = self.start_pos()
                 itactic = self.read_itactic()
                 self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
-                parameters.append(AST.ITacticTacticParam(
-                    tactic=itactic,
-                    line=param_line,
-                    column=param_column,
-                    end_line=param_end_line,
-                    end_column=param_end_column
-                ))
+                parameters.append(
+                    AST.ITacticTacticParam(
+                        tactic=itactic,
+                        line=param_line,
+                        column=param_column,
+                        end_line=param_end_line,
+                        end_column=param_end_column,
+                    )
+                )
             elif self.is_token_in(LEFT_BRACKETS):
                 # This could be:
                 # - Optional config paramters {foo := tt}
                 # - itactic environment for some strange monad
                 # - `[...]
                 param_line, param_column = self.start_pos()
-                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(
+                    "WARNING: Non-interactive parameter.  Check that this is not a parsing error."
+                )
                 print(self.format_file_location())
                 self.consume_matching_brackets()
                 self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
-                parameters.append(AST.TacticParam(
-                    line=param_line,
-                    column=param_column,
-                    end_line=param_end_line,
-                    end_column=param_end_column
-                ))
+                parameters.append(
+                    AST.TacticParam(
+                        line=param_line,
+                        column=param_column,
+                        end_line=param_end_line,
+                        end_column=param_end_column,
+                    )
+                )
             elif self.is_alphanum() and self.peek().string.isnumeric():
                 param_line, param_column = self.start_pos()
-                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(
+                    "WARNING: Non-interactive parameter.  Check that this is not a parsing error."
+                )
                 print(self.format_file_location())
                 self.read_alphanum()
                 self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
-                parameters.append(AST.TacticParam(
-                    line=param_line,
-                    column=param_column,
-                    end_line=param_end_line,
-                    end_column=param_end_column
-                ))
+                parameters.append(
+                    AST.TacticParam(
+                        line=param_line,
+                        column=param_column,
+                        end_line=param_end_line,
+                        end_column=param_end_column,
+                    )
+                )
             elif self.is_token_in(COMMANDS | {"else", "in"}):
                 break
             elif self.is_alphanum():
                 param_line, param_column = self.start_pos()
-                print("WARNING: Non-interactive parameter.  Check that this is not a parsing error.")
+                print(
+                    "WARNING: Non-interactive parameter.  Check that this is not a parsing error."
+                )
                 print(self.format_file_location())
                 self.read_full_name()
                 self.consume_space()
                 param_end_line, param_end_column = self.start_pos()
-                parameters.append(AST.TacticParam(
-                    line=param_line,
-                    column=param_column,
-                    end_line=param_end_line,
-                    end_column=param_end_column
-                ))
+                parameters.append(
+                    AST.TacticParam(
+                        line=param_line,
+                        column=param_column,
+                        end_line=param_end_line,
+                        end_column=param_end_column,
+                    )
+                )
             else:
                 break
         end_line, end_column = self.start_pos()
@@ -861,7 +956,7 @@ class LeanParser:
             line=line,
             column=column,
             end_line=end_line,
-            end_column=end_column
+            end_column=end_column,
         )
 
     def read_single_tactic(self) -> Union[AST.NamedTactic, AST.Solve1Tactic, AST.CalcTactic]:
@@ -872,11 +967,7 @@ class LeanParser:
             self.consume_space()
             end_line, end_column = self.start_pos()
             return AST.Solve1Tactic(
-                tactics=t_list,
-                line=line,
-                column=column,
-                end_line=end_line,
-                end_column=end_column
+                tactics=t_list, line=line, column=column, end_line=end_line, end_column=end_column
             )
         elif self.is_token("by"):
             self.read_token("by")
@@ -884,11 +975,7 @@ class LeanParser:
             tactic = self.read_maybe_semicolon_tactic()
             end_line, end_column = self.start_pos()
             return AST.Solve1Tactic(
-                tactics=[tactic],
-                line=line,
-                column=column,
-                end_line=end_line,
-                end_column=end_column
+                tactics=[tactic], line=line, column=column, end_line=end_line, end_column=end_column
             )
         elif self.is_token("calc"):
             # do this to get the calc expression
@@ -896,20 +983,19 @@ class LeanParser:
             self.consume_space()
             end_line, end_column = self.start_pos()
             return AST.CalcTactic(
-                line=line,
-                column=column,
-                end_line=end_line,
-                end_column=end_column
+                line=line, column=column, end_line=end_line, end_column=end_column
             )
         elif self.is_token("do"):
             self.raise_error('Parsing "do" tactic in interactive mode not yet implemented')
         else:
             return self.read_named_tactic()
 
-    def read_maybe_alt_tactic(self) -> Union[AST.AlternativeTactic, AST.NamedTactic, AST.Solve1Tactic, AST.CalcTactic]:
+    def read_maybe_alt_tactic(
+        self,
+    ) -> Union[AST.AlternativeTactic, AST.NamedTactic, AST.Solve1Tactic, AST.CalcTactic]:
         # can be <|>, {}, or named tactic
         # alternatives group as done <|> (done <|> trivial)
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         first_tactic = self.read_single_tactic()
         if self.is_token("<|>"):
             alternative_line, alternative_column = self.start_pos()
@@ -925,7 +1011,7 @@ class LeanParser:
                 line=line,
                 column=column,
                 end_line=end_line,
-                end_column=end_column
+                end_column=end_column,
             )
         else:
             return first_tactic
@@ -940,7 +1026,7 @@ class LeanParser:
         while True:
             self.consume_space()
             if self.is_token(right):
-                break # possible to have trailing ","
+                break  # possible to have trailing ","
             t = self.read_maybe_semicolon_tactic()
             tactics.append(t)
 
@@ -959,7 +1045,7 @@ class LeanParser:
     def read_maybe_semicolon_tactic(self) -> AST.Tactic:
         # can be ;, <|>, {}, or named tactic
         # semicolons group as (((skip ; skip) ; induction n) ; skip) ; simp
-        line,column = self.start_pos()
+        line, column = self.start_pos()
         tactic = self.read_maybe_alt_tactic()
         first_semicolon_pos = None
         semicolon_count = 0
@@ -977,15 +1063,15 @@ class LeanParser:
                 tactic = AST.SemicolonListTactic(
                     tactic1=tactic,
                     tactic_list=t_list,
-                    first_semicolon_line = first_semicolon_pos[0],
-                    first_semicolon_column = first_semicolon_pos[1],
-                    semicolon_line = semicolon_pos[0],
-                    semicolon_column = semicolon_pos[1],
-                    semicolon_count = semicolon_count,
+                    first_semicolon_line=first_semicolon_pos[0],
+                    first_semicolon_column=first_semicolon_pos[1],
+                    semicolon_line=semicolon_pos[0],
+                    semicolon_column=semicolon_pos[1],
+                    semicolon_count=semicolon_count,
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
             else:
                 tactic2 = self.read_maybe_alt_tactic()
@@ -993,18 +1079,17 @@ class LeanParser:
                 tactic = AST.SemicolonTactic(
                     tactic1=tactic,
                     tactic2=tactic2,
-                    first_semicolon_line = first_semicolon_pos[0],
-                    first_semicolon_column = first_semicolon_pos[1],
-                    semicolon_line = semicolon_pos[0],
-                    semicolon_column = semicolon_pos[1],
-                    semicolon_count = semicolon_count,
+                    first_semicolon_line=first_semicolon_pos[0],
+                    first_semicolon_column=first_semicolon_pos[1],
+                    semicolon_line=semicolon_pos[0],
+                    semicolon_column=semicolon_pos[1],
+                    semicolon_count=semicolon_count,
                     line=line,
                     column=column,
                     end_line=end_line,
-                    end_column=end_column
+                    end_column=end_column,
                 )
         return tactic
-
 
     def read_by(self) -> AST.ByProof:
         line, column = self.start_pos()
@@ -1013,11 +1098,7 @@ class LeanParser:
         tactic = self.read_maybe_semicolon_tactic()
         end_line, end_column = self.start_pos()
         return AST.ByProof(
-            tactic=tactic,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            tactic=tactic, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def read_begin(self) -> AST.BeginProof:
@@ -1027,13 +1108,9 @@ class LeanParser:
         tactics = self.read_tactic_list()
         end_line, end_column = self.start_pos()
         return AST.BeginProof(
-            tactics=tactics,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            tactics=tactics, line=line, column=column, end_line=end_line, end_column=end_column
         )
-    
+
     def read_bracket_proof(self) -> AST.BracketProof:
         line, column = self.start_pos()
         if not self.is_token("{"):
@@ -1041,11 +1118,7 @@ class LeanParser:
         tactics = self.read_tactic_list()
         end_line, end_column = self.start_pos()
         return AST.BracketProof(
-            tactics=tactics,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            tactics=tactics, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
     def read_itactic(self) -> AST.ITactic:
@@ -1055,11 +1128,7 @@ class LeanParser:
         tactics = self.read_tactic_list()
         end_line, end_column = self.start_pos()
         return AST.ITactic(
-            tactics=tactics,
-            line=line,
-            column=column,
-            end_line=end_line,
-            end_column=end_column
+            tactics=tactics, line=line, column=column, end_line=end_line, end_column=end_column
         )
 
 
@@ -1072,18 +1141,21 @@ def slice(lean_file, start, end):
 
     return None
 
+
 def main():
     assert len(sys.argv) == 2
     lean_dir = Path(sys.argv[1])
     assert lean_dir.is_dir
 
     for f in lean_dir.glob("**/*.lean"):
-        #print(f)
-        decls = set()
+        # print(f)
         lean_file = LeanFile(str(f))
         for i, line in enumerate(lean_file.lines):
             for token in line:
-                if token.string == "def" and prev_token(lean_file, token).type == TokenType.WHITESPACE:
+                if (
+                    token.string == "def"
+                    and prev_token(lean_file, token).type == TokenType.WHITESPACE
+                ):
                     try:
                         parser = LeanParser(lean_file, token.line, token.column)
                         parser.read_token("def")
@@ -1113,45 +1185,45 @@ def main():
                                     break
                                 break
                             return {
-                                'pos': (
+                                "pos": (
                                     parts[0].line,
                                     parts[0].column,
                                     parts[-1].end_line,
-                                    parts[-1].end_column
+                                    parts[-1].end_column,
                                 ),
-                                'command': 'parse',
-                                'parser_pos': (
+                                "command": "parse",
+                                "parser_pos": (
                                     parts[i].line,
                                     parts[i].column,
                                     parts[-1].end_line,
-                                    parts[-1].end_column
-                                )
+                                    parts[-1].end_column,
+                                ),
                             }
 
                         def process_param_expr(param_expr: AST.Expr):
-                            if expr_begins_with(param_expr, ['parse']):
+                            if expr_begins_with(param_expr, ["parse"]):
                                 return extract_parser(param_expr, 1)
-                            elif expr_begins_with(param_expr, ['interative', '.', 'parse']):
+                            elif expr_begins_with(param_expr, ["interative", ".", "parse"]):
                                 return extract_parser(param_expr, 3)
-                            elif expr_begins_with(param_expr, ['itactic']):
+                            elif expr_begins_with(param_expr, ["itactic"]):
                                 return {
-                                    'pos': (
+                                    "pos": (
                                         param_expr.expr_parts[0].line,
                                         param_expr.expr_parts[0].column,
                                         param_expr.expr_parts[0].end_line,
-                                        param_expr.expr_parts[0].end_column
+                                        param_expr.expr_parts[0].end_column,
                                     ),
-                                    'command': 'itactic'
+                                    "command": "itactic",
                                 }
-                            elif expr_begins_with(param_expr, ['interactive', ',', 'itactic']):
+                            elif expr_begins_with(param_expr, ["interactive", ",", "itactic"]):
                                 return {
-                                    'pos': (
+                                    "pos": (
                                         param_expr.expr_parts[0].line,
                                         param_expr.expr_parts[0].column,
                                         param_expr.expr_parts[2].end_line,
-                                        param_expr.expr_parts[2].end_column
+                                        param_expr.expr_parts[2].end_column,
                                     ),
-                                    'command': 'itactic'
+                                    "command": "itactic",
                                 }
 
                         interactive_parts = []
@@ -1173,26 +1245,23 @@ def main():
                             print()
                             print(f)
                             print("".join(t.string for t in line))
-                            #pprint(interactive_parts)
+                            # pprint(interactive_parts)
                             # reconstruct new declaration
                             s = ""
                             pos = (i, 0)
                             for part in interactive_parts:
                                 s += lean_file.slice_string(
-                                    pos[0],
-                                    pos[1],
-                                    part['pos'][0],
-                                    part['pos'][1]
+                                    pos[0], pos[1], part["pos"][0], part["pos"][1]
                                 )
-                                if part['command'] == 'itactic':
+                                if part["command"] == "itactic":
                                     s += "interactive.pr.parse interactive.pr.itactic "
-                                elif part['command'] == 'parse':
+                                elif part["command"] == "parse":
                                     s += "interactive.pr.parse"
                                     parser = lean_file.slice_string(
-                                        part['parser_pos'][0],
-                                        part['parser_pos'][1],
-                                        part['parser_pos'][2],
-                                        part['parser_pos'][3]
+                                        part["parser_pos"][0],
+                                        part["parser_pos"][1],
+                                        part["parser_pos"][2],
+                                        part["parser_pos"][3],
                                     )
                                     parser = parser.strip()
                                     if parser.startswith("(") and parser.endswith(")"):
@@ -1202,21 +1271,18 @@ def main():
                                     s += " (" + parser + ") "
                                 else:
                                     assert False
-                                pos = (part['pos'][2], part['pos'][3])
+                                pos = (part["pos"][2], part["pos"][3])
                             s += lean_file.slice_string(
-                                    pos[0],
-                                    pos[1],
-                                    pos[0]+1,
-                                    0
+                                pos[0], pos[1], pos[0] + 1, 0
                             )  # Go to end of the line (including newline)
                             print(s)
-
 
                     except Exception:
                         print()
                         print(f)
                         print("".join(t.string for t in line))
                         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()
