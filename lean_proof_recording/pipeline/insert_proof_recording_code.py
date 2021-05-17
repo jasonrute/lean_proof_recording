@@ -1,3 +1,4 @@
+import concurrent.futures
 from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
@@ -367,7 +368,7 @@ class ModifyInterativeParameters:
 
         return self.modify_def(lean_file, line, end_line, tactic_name, monad_type, iparams)
 
-    def find_and_modify(self, file: Path, dryrun=bool):
+    def find_and_modify(self, file: Path, dryrun: bool):
         lean_file = LeanFile(str(file))
         modifications: List[Modification] = []
         for tokens in lean_file.find_pattern([TokenType.WHITESPACE, "meta"]):
@@ -390,10 +391,23 @@ class ModifyInterativeParameters:
             #     print("=======")
 
 
+def _run_modify(f: Path, dryrun: bool):
+    ModifyInterativeParameters().find_and_modify(f, dryrun=dryrun)
+
+
 def modify_interactive_tactic_parameters(dryrun: bool):
+    all_paths = []
     for lean_dir in LEAN_DIRS:
-        for f in lean_dir.glob("**/*.lean"):
-            ModifyInterativeParameters().find_and_modify(f, dryrun=dryrun)
+        all_paths += [p for p in lean_dir.glob("**/*.lean")]
+
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        future_to_path = {executor.submit(_run_modify, path, dryrun): path for path in all_paths}
+        for future in concurrent.futures.as_completed(future_to_path):
+            path = future_to_path[future]
+            try:
+                _ = future.result()
+            except Exception as exc:
+                print("%r generated an exception: %s" % (path, exc))
 
 
 def _parse_main():
@@ -420,6 +434,10 @@ def main():
 
     print("Modify tactic parameters")
     modify_interactive_tactic_parameters(dryrun=dryrun)
+
+    print()
+    print("Done insert_proof_recording_code")
+    print()
 
 
 if __name__ == "__main__":
