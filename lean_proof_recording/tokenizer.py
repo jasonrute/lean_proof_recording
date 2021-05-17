@@ -6,6 +6,7 @@ import dataclasses
 import enum
 from typing import Generator, List, Union, Optional
 
+
 class TokenType(enum.Enum):
     LINE_COMMENT = 1
     BLOCK_COMMENT = 2
@@ -16,10 +17,12 @@ class TokenType(enum.Enum):
     BOF = 7  # Beginning of file
     EOF = 8  # End of file
 
+
 class TerminalType(enum.Enum):
     """
     Two types only used for intermediate calculations
     """
+
     BLOCK_COMMENT_TERMINAL = -1
     STRING_LITERAL_TERMINAL = -2
 
@@ -28,17 +31,55 @@ class TerminalType(enum.Enum):
 @dataclasses.dataclass
 class Token:
     """A token in the code, with position information"""
+
     string: str
     type: TokenType
     line: int
-    #end_line: int
+    # end_line: int
     column: int
     end_column: int
 
+
 # there are other tokens as well, but these are important and/or easy to work with
-SPECIAL_TOKENS_PARTS = [["`", "["], ["(",":",":",")"], [".",".","."], ["[","whnf","]"], ["<","|",">"], ["%","%"], ["(",")"], ["{","!"], ["!","}"], ["Type","*"], ["Sort","*"], ["(",":"], [":",")"], ["/","/"], [".","."], [":","="], ["@","@"], ["-",">"], ["<","-"], ["^","."], ["@","["], ["#","check"], ["#","reduce"], ["#","eval"], ["#","print"], ["#","help"], ["#","exit"], ["#","compile"], ["#","unify"], ["(","|"], ["|",")"], ["list", "Σ"], ["list", "Π"], ["⋂", "₀"]]
+SPECIAL_TOKENS_PARTS = [
+    ["`", "["],
+    ["(", ":", ":", ")"],
+    [".", ".", "."],
+    ["[", "whnf", "]"],
+    ["<", "|", ">"],
+    ["%", "%"],
+    ["(", ")"],
+    ["{", "!"],
+    ["!", "}"],
+    ["Type", "*"],
+    ["Sort", "*"],
+    ["(", ":"],
+    [":", ")"],
+    ["/", "/"],
+    [".", "."],
+    [":", "="],
+    ["@", "@"],
+    ["-", ">"],
+    ["<", "-"],
+    ["^", "."],
+    ["@", "["],
+    ["#", "check"],
+    ["#", "reduce"],
+    ["#", "eval"],
+    ["#", "print"],
+    ["#", "help"],
+    ["#", "exit"],
+    ["#", "compile"],
+    ["#", "unify"],
+    ["(", "|"],
+    ["|", ")"],
+    ["list", "Σ"],
+    ["list", "Π"],
+    ["⋂", "₀"],
+]
 # make sure they are sorted longest first
 SPECIAL_TOKENS = list(sorted(SPECIAL_TOKENS_PARTS, key=len, reverse=True))
+
 
 class LeanFile:
     filename: str  # useful for debugging
@@ -50,7 +91,7 @@ class LeanFile:
 
         # read file
         lines = []
-        with open(filename, 'r') as f:
+        with open(filename, "r") as f:
             for line in f:
                 lines.append(line)
 
@@ -67,7 +108,7 @@ class LeanFile:
             type=TokenType.EOF,
             line=final_token.line,
             column=final_token.end_column,
-            end_column=final_token.end_column
+            end_column=final_token.end_column,
         )
         self.lines[-1].append(eof)
 
@@ -78,36 +119,44 @@ class LeanFile:
     @staticmethod
     def is_name_char(c: str):
         # special good characters
-        if c in ['_', "'"]:
+        if c in ["_", "'"]:
             return True
         # three special bad unicode
-        if c in ['λ', 'Π', 'Σ']:
+        if c in ["λ", "Π", "Σ"]:
             return False
         # standard characters
         u = ord(c)
-        if (ord('A') <= u <= ord('Z') or
-            ord('a') <= u <= ord('z') or
-            ord('0') <= u <= ord('9')):
+        if ord("A") <= u <= ord("Z") or ord("a") <= u <= ord("z") or ord("0") <= u <= ord("9"):
             return True
         # other acceptable unicode
-        if ((0x3b1   <= u and u <= 0x3c9 and u != 0x3bb) or # Lower greek, but lambda
-            (0x391   <= u and u <= 0x3A9 and u != 0x3A0 and u != 0x3A3) or # Upper greek, but Pi and Sigma
-            (0x3ca   <= u and u <= 0x3fb) or               # Coptic letters
-            (0x1f00  <= u and u <= 0x1ffe) or              # Polytonic Greek Extended Character Set
-            (0x2100  <= u and u <= 0x214f) or              # Letter like block
-            (0x1d49c <= u and u <= 0x1d59f) or             # Latin letters, Script, Double-struck, Fractur
-            (0x207f  <= u and u <= 0x2089) or              # n superscript and numberic subscripts
-            (0x2090  <= u and u <= 0x209c) or              # letter-like subscripts
-            (0x1d62  <= u and u <= 0x1d6a)):               # letter-like subscripts
+        if (
+            (0x3B1 <= u and u <= 0x3C9 and u != 0x3BB)
+            or (0x391 <= u and u <= 0x3A9 and u != 0x3A0 and u != 0x3A3)  # Lower greek, but lambda
+            or (0x3CA <= u and u <= 0x3FB)  # Upper greek, but Pi and Sigma
+            or (0x1F00 <= u and u <= 0x1FFE)  # Coptic letters
+            or (0x2100 <= u and u <= 0x214F)  # Polytonic Greek Extended Character Set
+            or (0x1D49C <= u and u <= 0x1D59F)  # Letter like block
+            or (0x207F <= u and u <= 0x2089)  # Latin letters, Script, Double-struck, Fractur
+            or (0x2090 <= u and u <= 0x209C)  # n superscript and numberic subscripts
+            or (0x1D62 <= u and u <= 0x1D6A)  # letter-like subscripts
+        ):  # letter-like subscripts
             return True
         return False
 
     @staticmethod
     def tokenize_line(line: str, line_num: int, prev_token_type: TokenType) -> List[Token]:
-        assert prev_token_type in [TokenType.BOF, TokenType.WHITESPACE, TokenType.BLOCK_COMMENT, TokenType.LINE_COMMENT, TokenType.STRING_LITERAL], (line, line_num, prev_token_type)
+        assert prev_token_type in [
+            TokenType.BOF,
+            TokenType.WHITESPACE,
+            TokenType.BLOCK_COMMENT,
+            TokenType.LINE_COMMENT,
+            TokenType.STRING_LITERAL,
+        ], (line, line_num, prev_token_type)
         # step 1: label char types
         prev_char = None
-        prev_char_type = prev_token_type if prev_token_type != TokenType.LINE_COMMENT else TokenType.WHITESPACE
+        prev_char_type = (
+            prev_token_type if prev_token_type != TokenType.LINE_COMMENT else TokenType.WHITESPACE
+        )
         char_types = []
         for i, char in enumerate(line):
             # label symbol type
@@ -123,9 +172,9 @@ class LeanFile:
                     char_type = TerminalType.STRING_LITERAL_TERMINAL
                 else:
                     char_type = TokenType.STRING_LITERAL
-            elif char == "-" and line[i+1] == "-":
+            elif char == "-" and line[i + 1] == "-":
                 char_type = TokenType.LINE_COMMENT
-            elif char == "/" and line[i+1] == "-":
+            elif char == "/" and line[i + 1] == "-":
                 char_type = TokenType.BLOCK_COMMENT
             elif char == '"':
                 char_type = TokenType.STRING_LITERAL
@@ -160,9 +209,15 @@ class LeanFile:
 
         for char, char_type in zip(line[1:], char_types[1:]):
             i += 1
-            if prev_char_type == TokenType.BLOCK_COMMENT and char_type == TerminalType.BLOCK_COMMENT_TERMINAL:
+            if (
+                prev_char_type == TokenType.BLOCK_COMMENT
+                and char_type == TerminalType.BLOCK_COMMENT_TERMINAL
+            ):
                 token_string += char
-            elif prev_char_type == TokenType.STRING_LITERAL and char_type == TerminalType.STRING_LITERAL_TERMINAL:
+            elif (
+                prev_char_type == TokenType.STRING_LITERAL
+                and char_type == TerminalType.STRING_LITERAL_TERMINAL
+            ):
                 token_string += char
             elif char_type != TokenType.SYMBOL and prev_char_type == char_type:
                 token_string += char
@@ -183,15 +238,19 @@ class LeanFile:
             # find longest token group which is in the list of special tokens
             # the tokens are sorted longest first
             for special in SPECIAL_TOKENS:
-                if all(t.string == s for t, s in zip(tokens[i:i+len(special)], special)):
+                if all(t.string == s for t, s in zip(tokens[i : i + len(special)], special)):
                     new_token = Token(
                         string="".join(special),
                         type=TokenType.SYMBOL,
                         line=tokens[i].line,
                         column=tokens[i].column,
-                        end_column=tokens[i+len(special)-1].end_column
+                        end_column=tokens[i + len(special) - 1].end_column,
                     )
-                    assert new_token.end_column == len(new_token.string) + new_token.column, (new_token.column, new_token.end_column, new_token.string)
+                    assert new_token.end_column == len(new_token.string) + new_token.column, (
+                        new_token.column,
+                        new_token.end_column,
+                        new_token.string,
+                    )
                     i2 = i + len(special)
                     break
             else:
@@ -207,7 +266,11 @@ class LeanFile:
         assert line < len(self.lines)
         for token in self.lines[line]:
             if token.column < column:
-                assert token.end_column <= column, "The provided line/column ({},{}) doesn't match with the closest token ({},{}):\n{}".format(line, column, line, token.column, token.string)
+                assert (
+                    token.end_column <= column
+                ), "The provided line/column ({},{}) doesn't match with the closest token ({},{}):\n{}".format(
+                    line, column, line, token.column, token.string
+                )
                 continue
             if token.column == column:
                 return token
@@ -234,25 +297,39 @@ class LeanFile:
 
     def iter_tokens_left(self, start_line: int, start_column: int) -> Generator[Token, None, None]:
         start_pos = self.get_token_pos(start_line, start_column)
-        for line in reversed(self.lines[0:start_line+1]):
-            for token in reversed(line[0: start_pos]):  # don't include current token
+        for line in reversed(self.lines[0 : start_line + 1]):
+            for token in reversed(line[0:start_pos]):  # don't include current token
                 yield token
             start_pos = None
 
-    def slice_tokens(self, start_line: int, start_column: int, end_line: int, end_column: int) -> List[Token]:
+    def slice_tokens(
+        self, start_line: int, start_column: int, end_line: int, end_column: int
+    ) -> List[Token]:
         return [
-            t for t in self.iter_tokens_right(start_line, start_column)
+            t
+            for t in self.iter_tokens_right(start_line, start_column)
             if (t.line, t.column) < (end_line, end_column)
         ]
 
-    def slice_string(self, start_line: int, start_column: int, end_line: int, end_column: int, clean: bool = False) -> str:
+    def slice_string(
+        self,
+        start_line: int,
+        start_column: int,
+        end_line: int,
+        end_column: int,
+        clean: bool = False,
+    ) -> str:
         tokens = self.slice_tokens(start_line, start_column, end_line, end_column)
         if clean:
             # remove comments, newlines, and extra whitespace
             strings = []
             in_whitespace = True
             for t in tokens:
-                if t.type in (TokenType.WHITESPACE, TokenType.LINE_COMMENT, TokenType.BLOCK_COMMENT):
+                if t.type in (
+                    TokenType.WHITESPACE,
+                    TokenType.LINE_COMMENT,
+                    TokenType.BLOCK_COMMENT,
+                ):
                     if in_whitespace is False:
                         strings.append(" ")
                         in_whitespace = True
@@ -265,12 +342,14 @@ class LeanFile:
 
     @staticmethod
     def token_matches_pattern(t: Token, p: Union[str, TokenType]):
-            if isinstance(p, str):
-                return t.string == p
-            else:
-                return t.type == p
+        if isinstance(p, str):
+            return t.string == p
+        else:
+            return t.type == p
 
-    def find_pattern(self, pattern: List[Union[str, TokenType]]) -> Generator[List[Token], None, None]:
+    def find_pattern(
+        self, pattern: List[Union[str, TokenType]]
+    ) -> Generator[List[Token], None, None]:
         """
         Search for a pattern.
 
@@ -288,20 +367,26 @@ class LeanFile:
                 if all(self.token_matches_pattern(t, p) for t, p in zip(tokens, pattern)):
                     yield list(tokens)
 
-    def get_prev_matching_pattern(self, line: int, column: int, patterns: List[Union[str, TokenType]]) -> Optional[Token]:
+    def get_prev_matching_pattern(
+        self, line: int, column: int, patterns: List[Union[str, TokenType]]
+    ) -> Optional[Token]:
         for t in self.iter_tokens_left(line, column):
             if any(self.token_matches_pattern(t, p) for p in patterns):
                 return t
         return None
 
-    def get_next_matching_pattern(self, line: int, column: int, patterns: List[Union[str, TokenType]]) -> Optional[Token]:
+    def get_next_matching_pattern(
+        self, line: int, column: int, patterns: List[Union[str, TokenType]]
+    ) -> Optional[Token]:
         for t in self.iter_tokens_right(line, column):
             if any(self.token_matches_pattern(t, p) for p in patterns):
                 return t
         return None
 
-    def find_left_bracket(self, lefts: List[str], rights: List[str], line: int, column: int) -> Optional[Token]:
-        stack_depth = 1 # iter_tokens_left skips the current token, so start counter at 1
+    def find_left_bracket(
+        self, lefts: List[str], rights: List[str], line: int, column: int
+    ) -> Optional[Token]:
+        stack_depth = 1  # iter_tokens_left skips the current token, so start counter at 1
         for t in self.iter_tokens_left(line, column):
             if any(self.token_matches_pattern(t, l) for l in lefts):
                 stack_depth -= 1
@@ -311,7 +396,9 @@ class LeanFile:
                 stack_depth += 1
         return None
 
-    def find_right_bracket(self, lefts: List[str], rights: List[str], line: int, column: int) -> Optional[Token]:
+    def find_right_bracket(
+        self, lefts: List[str], rights: List[str], line: int, column: int
+    ) -> Optional[Token]:
         stack_depth = 0
         for t in self.iter_tokens_left(line, column):
             if any(self.token_matches_pattern(t, l) for l in rights):
@@ -322,19 +409,20 @@ class LeanFile:
                 stack_depth += 1
         return None
 
+
 if __name__ == "__main__":
-    #filename = "tmp/proof_recording_example.lean"
+    # filename = "tmp/proof_recording_example.lean"
     filename = "/Users/jasonrute/.elan/toolchains/leanprover-community-lean-3.20.0/lib/lean/library/init/data/nat/bitwise.lean"
 
-    assert not LeanFile.is_name_char('λ')
-    assert not LeanFile.is_name_char('Π')
-    assert not LeanFile.is_name_char('Σ')
+    assert not LeanFile.is_name_char("λ")
+    assert not LeanFile.is_name_char("Π")
+    assert not LeanFile.is_name_char("Σ")
 
     leanfile = LeanFile(filename)
     print(len(leanfile.lines))
     for line in leanfile.lines:
-        #print(line)
+        # print(line)
         print([t.string for t in line])
-        #print([t.type for t in line])
-        #print([t.start_column for t in line])
-        #print([t.end_column for t in line])
+        # print([t.type for t in line])
+        # print([t.start_column for t in line])
+        # print([t.end_column for t in line])

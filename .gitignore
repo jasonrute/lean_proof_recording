@@ -9,3 +9,4 @@
 /data2
 **/*~
 /_out
+*.egg-info
