@@ -68,8 +68,8 @@ def delete_oleans(lean_files: List[Path]):
 
 def run_lean_make(filename: Path, out_directory: Path):
     print("running lean on", filename, "...")
-    with open(out_directory / "lean_stdout.log", "a+b") as stdout_file:
-        with open(out_directory / "lean_stderr.log", "a+b") as stderr_file:
+    with open(out_directory / "lean_stdout.log", "w+b") as stdout_file:
+        with open(out_directory / "lean_stderr.log", "w+b") as stderr_file:
             print("piping stdout to", stdout_file.name, "...")
             print("piping stderr to", stderr_file.name, "...")
             out = subprocess.Popen(
