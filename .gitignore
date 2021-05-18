@@ -10,3 +10,4 @@
 **/*~
 /_out
 *.egg-info
+src/all.lean
