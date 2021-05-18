@@ -15,7 +15,8 @@ a combination of python scripts and some lean hacks. No files outside of this di
 modified, so you don't have to worry about messing up your lean install.
 
 Run this command to build lean, and populate `_target` with both `mathlib` and `lean/library` code.
-It also makes some unstable modifications to `leanpkg.path`.
+It also makes some unstable modifications to `leanpkg.path` and creates `src/all.lean` importing all
+lean files in the project dependencies, later used for tracing.
 
 ```bash
 python3 -m lean_proof_recording.pipeline.refresh
@@ -36,17 +37,11 @@ code will show since certain options are not set.
 lean --make src/empty.lean
 ```
 
-Build `all.lean` for mathlib.
-
-```bash
-bash _target/deps/mathlib/scripts/mk_all.sh
-```
-
 ### Tracing
 
 This command generates data. This is very time consuming (many hours). The data directory must exist
-and is encouraged to be empty. Replace `src/empty.lean` with `_target/deps/mathlib/src/all.lean` to
-trace all of mathlib.
+and is encouraged to be empty. Replace `src/empty.lean` with `src/all.lean` to trace all the
+dependencies of the project.
 
 ```bash
 python3 -m lean_proof_recording.pipeline.run_lean_and_save_results src/empty.lean <path/to/data/directory>
