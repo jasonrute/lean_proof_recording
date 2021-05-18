@@ -10,5 +10,6 @@ setup(
         "mpmath",
         "pandas",
         "jsonlines",
+        "tqdm",
     ],
 )
