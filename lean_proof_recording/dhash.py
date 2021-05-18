@@ -15,7 +15,7 @@ def hash_string_to_float(arg):
     return fmod(x * mp.pi, mpf(1.0))
 
 
-def get_split(arg, train_threshold=0.80, valid_threshold=0.845):
+def get_split(arg, train_threshold=0.96, valid_threshold=0.98):
     float_hash = hash_string_to_float(arg.split()[0])
     if float_hash < train_threshold:
         return "train"
@@ -30,8 +30,8 @@ def _parse_main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("decls_file")
-    parser.add_argument("valid_frac", type=float, help="number between 0 and 100", default=4.5)
-    parser.add_argument("test_frac", type=float, help="number between 0 and 100", default=15.5)
+    parser.add_argument("valid_frac", type=float, help="number between 0 and 100", default=2)
+    parser.add_argument("test_frac", type=float, help="number between 0 and 100", default=2)
     parser.add_argument("dest_dir")
     return parser.parse_args()
 
