@@ -14,6 +14,7 @@ python3 -m lean_proof_recording.pipeline.refresh
 python3 -m lean_proof_recording.pipeline.insert_proof_recording_code
 
 lean --make src/empty.lean
+bash _target/deps/mathlib/scripts/mk_all.sh
 mkdir "$DATA_DIR"
 
 # python3 -m lean_proof_recording.pipeline.run_lean_and_save_results _target/deps/mathlib/src/category_theory/currying.lean "$DATA_DIR"

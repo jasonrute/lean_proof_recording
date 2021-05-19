@@ -5,14 +5,6 @@ import shutil
 import subprocess
 
 
-SOURCE_SUFFIX_IGNORE = [
-    "library",
-    "lean_proof_recording/./src",
-    "lean_proof_recording/src",
-    "lean-gptf/src",
-]
-
-
 def _main():
     """
     Refreshes the Lean setup:
@@ -34,16 +26,6 @@ def _main():
         print("_target directory removed.")
     else:
         print("No _target directory.")
-
-    # delete src/all.lean
-    print()
-    print("====================")
-    print("Clean `src/all.lean`")
-    print("====================")
-    all_lean = Path("src/all.lean")
-    if all_lean.exists():
-        os.remove(Path("src/all.lean"))
-        print("src/all.lean removed.")
 
     # build lean according to leanpkg.toml
     print()
@@ -90,29 +72,6 @@ def _main():
     with open(path_file, "w") as f:
         f.writelines(lines)
     print("Path changed")
-
-    # generate all.lean
-    print("")
-    print("=====================")
-    print("Generate src/all.lean")
-    print("=====================")
-    imports = []
-    for p in path_data["path"]:
-        skip = False
-        for s in SOURCE_SUFFIX_IGNORE:
-            if p.endswith(s):
-                skip = True
-        if skip:
-            print("Skipping: ", p)
-        else:
-            print("Found path: ", p)
-            pp = Path(p)
-            for file_name in pp.glob("**/*.lean"):
-                i = "import " + str(file_name)[len(p) + 1 : -5].replace("/", ".")
-                imports += [i]
-    with open("src/all.lean", "w") as w:
-        for i in sorted(list(set(imports))):
-            w.write(f"{i}\n")
 
 
 if __name__ == "__main__":
