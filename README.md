@@ -37,6 +37,7 @@ lean --make src/empty.lean
 ```
 
 Build `all.lean` for mathlib.
+
 ```bash
 bash _target/deps/mathlib/scripts/mk_all.sh
 ```
