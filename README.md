@@ -42,6 +42,7 @@ Build `all.lean` for mathlib.
 bash _target/deps/mathlib/scripts/mk_all.sh
 ```
 
+
 ### Tracing
 
 This command generates data. This is very time consuming (many hours). The data directory must exist

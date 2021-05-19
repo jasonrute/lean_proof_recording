@@ -86,7 +86,6 @@ def insert_tactic_tracing_code(dryrun: bool, sexp: bool):
     prefix_modifier.build_file(dryrun=dryrun)
 
     modifier = LeanModifier(TACTIC_LEAN_FILE)
-    # modifier.delete_lines(l1, l2)
     modifier.add_lines_at_end(tactic_recording_code)
     modifier.build_file(dryrun=dryrun)
 

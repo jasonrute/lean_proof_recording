@@ -41,13 +41,15 @@ def _main():
     print("===================================================")
     #   get path from lean
     print("Getting lean paths.")
-    with subprocess.Popen(["lean", "--path"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as out:
+    with subprocess.Popen(
+        ["lean", "--path"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+    ) as out:
         stdout, stderr = out.communicate()
     assert stderr is None, stderr
     s = stdout.decode("utf-8")
-    d = json.loads(s)
+    path_data = json.loads(s)
     lean_library = None
-    for p in d["path"]:
+    for p in path_data["path"]:
         if p.endswith("lean/library"):
             lean_library = Path(p)
             break
