@@ -110,5 +110,6 @@ class LeanModifier:
                 if verbose:
                     print("--PR END CODE INSERT")
         if not dryrun:
+            self.lean_path.chmod(0o644)  # set file permissions to -rw-r--r--
             with open(self.lean_path, "w") as f:
                 f.writelines(new_lines)
