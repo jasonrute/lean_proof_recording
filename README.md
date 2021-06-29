@@ -1,11 +1,36 @@
 # Proof recording in Lean 3
 
+This is proof recording code for Lean 3 associated with the paper
+[Proof Artifact Co-training for
+Theorem Proving with Language Models](https://arxiv.org/abs/2102.06203).
+
 ## Prerequesites
 
 Have `elan` and `leanproject` installed. The scripts require Python 3.7+.
 
-## Workflow
+## Recommended setup
 
+```bash
+python3 -m venv venv  # new virtual env
+source ./venv/bin/activate
+pip install .  # or  pip install -e .  for editable mode
+```
+
+## TLDR Workflow
+
+Only tested on mac and linux.
+
+- Make an empty directory to store the data.
+- Run `bash ./scripts/run_all.sh $DATA_DIR`.
+
+This will take from many minutes to many hours based on the available
+parallelization.  The data needed to train a language model can be found in
+`$DATA_DIR/cleaned_training_data`.
+
+## Extended Workflow
+
+This will go through the steps of the master script and describe the various
+types of recorded data, which may be of interest to various researchers.
 Only tested on mac and linux.
 
 ### Nonstandard Lean Setup
@@ -41,7 +66,6 @@ Build `all.lean` for mathlib.
 ```bash
 bash _target/deps/mathlib/scripts/mk_all.sh
 ```
-
 
 ### Tracing
 
