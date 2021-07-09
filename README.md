@@ -1,11 +1,36 @@
 # Proof recording in Lean 3
 
+This is proof recording code for Lean 3 associated with the paper
+[Proof Artifact Co-training for
+Theorem Proving with Language Models](https://arxiv.org/abs/2102.06203).
+
 ## Prerequesites
 
 Have `elan` and `leanproject` installed. The scripts require Python 3.7+.
 
-## Workflow
+## Recommended setup
 
+```bash
+python3 -m venv venv  # new virtual env
+source ./venv/bin/activate
+pip install .  # or  pip install -e .  for editable mode
+```
+
+## TLDR Workflow
+
+Only tested on mac and linux.
+
+- Make an empty directory to store the data.
+- Run `bash ./scripts/run_all.sh $DATA_DIR`.
+
+This will take from many minutes to many hours based on the available
+parallelization.  The data needed to train a language model can be found in
+`$DATA_DIR/cleaned_training_data`.
+
+## Extended Workflow
+
+This will go through the steps of the master script and describe the various
+types of recorded data, which may be of interest to various researchers.
 Only tested on mac and linux.
 
 ### Nonstandard Lean Setup
@@ -41,7 +66,6 @@ Build `all.lean` for mathlib.
 ```bash
 bash _target/deps/mathlib/scripts/mk_all.sh
 ```
-
 
 ### Tracing
 
@@ -112,17 +136,29 @@ following `jsonl` files:
 * `args.jsonl` A 2D table of data for each tactic command argument. Use the `key` column to relate
   to the other data structures.
 
+### Extract training data
+
+This file step is to condense the currently extracted data into training data suitable for training
+a language model.
+
+```bash
+python3 -m lean_proof_recording.pipeline.extract_training_testing_data <path/to/data/directory>
+```
+
+This will filter and clean the data slighlty as well as split the data into training (92%),
+validation (4%), and testing (4%).  The split is deterministic based on a hash of the declaration
+name, allowing intercompatibility with other sources of lean data and other lean environments.
+
 ## Putting it all together
 
-**This is still a work in progress.** However, for ease of understanding the data,
-an [example notebook](data_examples.ipynb) is included.
+For ease of understanding the data, an [example notebook](data_examples.ipynb) is included.
 
 ## Customizations and Improvements
 
 ### Set the version of Lean and Mathlib
 
 Edit the `leanpkg.toml` file to change the version of lean and mathlib. This
-is really important to main exact compatability with other projects. (Double
+is really important to maintain exact compatability with other projects. (Double
 check after running the `refresh.py` script above that the versions are the
 same as you set them.)
 
