@@ -303,6 +303,6 @@ else tactic.step t
 end pr
 
 -- redefined istep to do proof recording
-meta def tactic.istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
+meta def tactic.istep {α : Type u} (line0 col0 line col ast : ℕ) (t : tactic α) : tactic unit :=
 λ s, (@scope_trace _ line col (λ _, pr.step_and_record line col t s)).clamp_pos line0 line col
 --PR END MODIFICATION

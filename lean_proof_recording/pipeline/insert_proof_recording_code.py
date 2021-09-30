@@ -34,8 +34,8 @@ CONV_INTERACTIVE_LEAN_FILE_MODIFICATIONS = Path(
     "lean_modifications/conv_interactive_modifications.lean"
 )
 
-ISTEP_CODE = """meta def istep {α : Type u} (line0 col0 : ℕ) (line col : ℕ) (t : tactic α) : tactic unit :=
-λ s, (@scope_trace _ line col (λ _, step t s)).clamp_pos line0 line col
+ISTEP_CODE = """meta def istep {α : Type u} (line0 col0 line col ast : ℕ) (t : tactic α) : tactic unit :=
+λ s, (@scope_trace _ line col (λ _, with_ast ast (step t) s)).clamp_pos line0 line col
 """
 
 TACTIC_ITACTIC_CODE = """meta def itactic : Type :=
